@@ -1,0 +1,54 @@
+{
+  "name": "depolls",
+  "version": "1.0.0",
+  "description": "Web3 Polling Platform",
+  "main": "index.js",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "hardhat test",
+    "eject": "react-scripts eject",
+    "node": "hardhat node",
+    "deploy-local": "hardhat run scripts/deploy.js --network localhost",
+    "compile": "hardhat compile"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@chakra-ui/react": "^2.8.2",
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@web3modal/ethereum": "^2.7.1",
+    "@web3modal/react": "^2.7.1",
+    "chart.js": "^4.4.1",
+    "ethers": "5.7.2",
+    "framer-motion": "^10.16.16",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "viem": "^1.19.11",
+    "wagmi": "^1.4.10"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "2.0.2",
+    "@nomiclabs/hardhat-ethers": "2.2.3",
+    "@openzeppelin/contracts": "4.9.3",
+    "chai": "4.3.7",
+    "dotenv": "16.3.1",
+    "hardhat": "2.14.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
