@@ -19,8 +19,8 @@
     "@chakra-ui/react": "^2.8.2",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
-    "@web3modal/ethereum": "^2.7.1",
-    "@web3modal/react": "^2.7.1",
+    "@web3modal/ethereum": "2.4.1",
+    "@web3modal/react": "2.4.1",
     "chart.js": "^4.4.1",
     "ethers": "^5.7.2",
     "framer-motion": "^10.16.16",
@@ -29,7 +29,7 @@
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
     "viem": "^1.19.11",
-    "wagmi": "^1.4.10"
+    "wagmi": "0.12.19"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^2.0.2",
@@ -38,10 +38,10 @@
     "chai": "^4.3.7",
     "dotenv": "^16.3.1",
     "hardhat": "^2.14.0",
-    "typescript": "^4.9.5"
+    "typescript": "4.9.5"
   },
-  "resolutions": {
-    "typescript": "^4.9.5"
+  "overrides": {
+    "typescript": "4.9.5"
   },
   "browserslist": {
     "production": [
