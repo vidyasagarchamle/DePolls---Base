@@ -15,6 +15,7 @@ import {
 import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { DePollsABI } from '../contracts/abis';
 import { Bar } from 'react-chartjs-2';
+import { ethers } from 'ethers';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -34,20 +35,49 @@ ChartJS.register(
   Legend
 );
 
+// Hardcode the contract address for now
+const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
+
+// Helper function to create getPoll calldata
+const getPollCalldata = (pollId) => {
+  const iface = new ethers.utils.Interface(DePollsABI);
+  return iface.encodeFunctionData('getPoll', [pollId]);
+};
+
+// Helper function to decode poll data
+const decodePollData = (data) => {
+  const iface = new ethers.utils.Interface(DePollsABI);
+  const decoded = iface.decodeFunctionResult('getPoll', data);
+  
+  return {
+    id: decoded.id.toNumber(),
+    creator: decoded.creator,
+    question: decoded.question,
+    deadline: decoded.deadline.toNumber(),
+    isWeighted: decoded.isWeighted,
+    isMultipleChoice: decoded.isMultipleChoice,
+    isActive: decoded.isActive,
+    options: decoded.options.map(opt => ({
+      text: opt.text,
+      voteCount: opt.voteCount.toNumber()
+    }))
+  };
+};
+
 const PollCard = ({ poll }) => {
   const { address } = useAccount();
   const toast = useToast();
   const [selectedOptions, setSelectedOptions] = useState([]);
 
   const { data: hasVoted } = useContractRead({
-    address: process.env.REACT_APP_POLLS_CONTRACT_ADDRESS,
+    address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'hasVoted',
     args: [poll.id, address],
   });
 
   const { config } = usePrepareContractWrite({
-    address: process.env.REACT_APP_POLLS_CONTRACT_ADDRESS,
+    address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'vote',
     args: [poll.id, selectedOptions],
@@ -156,39 +186,66 @@ const PollCard = ({ poll }) => {
 
 const PollList = () => {
   const [polls, setPolls] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const { data: pollCount } = useContractRead({
-    address: process.env.REACT_APP_POLLS_CONTRACT_ADDRESS,
+    address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'pollCount',
+    watch: true,
+  });
+
+  const { data: poll0 } = useContractRead({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'getPoll',
+    args: [0],
+    enabled: pollCount && pollCount > 0,
   });
 
   useEffect(() => {
-    const fetchPolls = async () => {
+    const loadPolls = async () => {
       if (!pollCount) return;
-
-      const pollPromises = Array.from({ length: pollCount }, (_, i) =>
-        useContractRead({
-          address: process.env.REACT_APP_POLLS_CONTRACT_ADDRESS,
-          abi: DePollsABI,
-          functionName: 'getPoll',
-          args: [i],
-        })
-      );
-
-      const pollsData = await Promise.all(pollPromises);
-      setPolls(pollsData);
+      
+      try {
+        const pollsData = [];
+        for (let i = 0; i < pollCount; i++) {
+          const result = await fetch(`https://api.etherscan.io/api?module=proxy&action=eth_call&to=${POLLS_CONTRACT_ADDRESS}&data=${getPollCalldata(i)}&tag=latest`);
+          const data = await result.json();
+          if (data.result) {
+            pollsData.push(decodePollData(data.result));
+          }
+        }
+        setPolls(pollsData.filter(poll => poll && poll.isActive));
+      } catch (error) {
+        console.error('Error loading polls:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    fetchPolls();
+    loadPolls();
   }, [pollCount]);
+
+  if (loading) {
+    return (
+      <VStack spacing={6} align="stretch">
+        <Heading size="lg">Active Polls</Heading>
+        <Text>Loading polls...</Text>
+      </VStack>
+    );
+  }
 
   return (
     <VStack spacing={6} align="stretch">
       <Heading size="lg">Active Polls</Heading>
-      {polls.map((poll, index) => (
-        <PollCard key={index} poll={poll} />
-      ))}
+      {polls.length === 0 ? (
+        <Text>No active polls found</Text>
+      ) : (
+        polls.map((poll, index) => (
+          <PollCard key={poll.id} poll={poll} />
+        ))
+      )}
     </VStack>
   );
 };
