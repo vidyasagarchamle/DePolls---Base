@@ -9,17 +9,27 @@ import Navbar from './components/Navbar';
 import PollList from './components/PollList';
 import CreatePoll from './components/CreatePoll';
 
-const projectId = process.env.REACT_APP_WALLET_CONNECT_PROJECT_ID;
+// Hardcode the project ID for now
+const projectId = "ad702a29a086d332c88ecdd4c8dcd51c";
 const chains = [sepolia];
+
+console.log("WalletConnect Project ID:", projectId); // Debug log
 
 const { publicClient, webSocketPublicClient } = configureChains(
   chains,
-  [w3mProvider({ projectId }), publicProvider()]
+  [
+    w3mProvider({ projectId }),
+    publicProvider()
+  ]
 );
 
 const wagmiConfig = createConfig({
   autoConnect: true,
-  connectors: w3mConnectors({ chains, projectId }),
+  connectors: w3mConnectors({ 
+    projectId,
+    version: '2',
+    chains 
+  }),
   publicClient,
   webSocketPublicClient
 });
@@ -47,6 +57,10 @@ function App() {
         ethereumClient={ethereumClient}
         defaultChain={sepolia}
         themeMode="light"
+        explorerRecommendedWalletIds={[
+          'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
+          '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0'  // Trust Wallet
+        ]}
       />
     </>
   );
