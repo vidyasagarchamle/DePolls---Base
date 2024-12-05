@@ -5,17 +5,17 @@ import {
   Heading,
   Text,
   Button,
-  Progress,
   RadioGroup,
   Radio,
   Checkbox,
   Stack,
   useToast,
+  Alert,
+  AlertIcon,
 } from '@chakra-ui/react';
 import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { DePollsABI } from '../contracts/abis';
 import { Bar } from 'react-chartjs-2';
-import { ethers } from 'ethers';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -37,32 +37,6 @@ ChartJS.register(
 
 // Hardcode the contract address for now
 const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
-
-// Helper function to create getPoll calldata
-const getPollCalldata = (pollId) => {
-  const iface = new ethers.utils.Interface(DePollsABI);
-  return iface.encodeFunctionData('getPoll', [pollId]);
-};
-
-// Helper function to decode poll data
-const decodePollData = (data) => {
-  const iface = new ethers.utils.Interface(DePollsABI);
-  const decoded = iface.decodeFunctionResult('getPoll', data);
-  
-  return {
-    id: decoded.id.toNumber(),
-    creator: decoded.creator,
-    question: decoded.question,
-    deadline: decoded.deadline.toNumber(),
-    isWeighted: decoded.isWeighted,
-    isMultipleChoice: decoded.isMultipleChoice,
-    isActive: decoded.isActive,
-    options: decoded.options.map(opt => ({
-      text: opt.text,
-      voteCount: opt.voteCount.toNumber()
-    }))
-  };
-};
 
 const PollCard = ({ poll }) => {
   const { address } = useAccount();
@@ -106,18 +80,6 @@ const PollCard = ({ poll }) => {
   };
 
   const totalVotes = poll.options.reduce((sum, opt) => sum + parseInt(opt.voteCount), 0);
-
-  const chartData = {
-    labels: poll.options.map(opt => opt.text),
-    datasets: [
-      {
-        label: 'Votes',
-        data: poll.options.map(opt => opt.voteCount),
-        backgroundColor: 'rgba(53, 162, 235, 0.5)',
-      },
-    ],
-  };
-
   const isExpired = new Date(poll.deadline * 1000) < new Date();
 
   return (
@@ -173,7 +135,14 @@ const PollCard = ({ poll }) => {
         </VStack>
       ) : (
         <Box h="300px">
-          <Bar data={chartData} options={{ maintainAspectRatio: false }} />
+          <Bar data={{
+            labels: poll.options.map(opt => opt.text),
+            datasets: [{
+              label: 'Votes',
+              data: poll.options.map(opt => opt.voteCount),
+              backgroundColor: 'rgba(53, 162, 235, 0.5)',
+            }]
+          }} options={{ maintainAspectRatio: false }} />
         </Box>
       )}
 
@@ -187,45 +156,68 @@ const PollCard = ({ poll }) => {
 const PollList = () => {
   const [polls, setPolls] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { address } = useAccount();
 
-  const { data: pollCount } = useContractRead({
+  const { data: pollCount, isError: isPollCountError } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
   });
 
-  const { data: poll0 } = useContractRead({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'getPoll',
-    args: [0],
-    enabled: pollCount && pollCount > 0,
-  });
-
   useEffect(() => {
-    const loadPolls = async () => {
+    const fetchPolls = async () => {
       if (!pollCount) return;
       
       try {
+        setLoading(true);
+        setError(null);
+        console.log("Fetching polls. Count:", pollCount.toString());
+
         const pollsData = [];
         for (let i = 0; i < pollCount; i++) {
-          const result = await fetch(`https://api.etherscan.io/api?module=proxy&action=eth_call&to=${POLLS_CONTRACT_ADDRESS}&data=${getPollCalldata(i)}&tag=latest`);
-          const data = await result.json();
-          if (data.result) {
-            pollsData.push(decodePollData(data.result));
+          try {
+            const result = await useContractRead({
+              address: POLLS_CONTRACT_ADDRESS,
+              abi: DePollsABI,
+              functionName: 'getPoll',
+              args: [i],
+            });
+            
+            if (result && result.data) {
+              console.log("Poll", i, "data:", result.data);
+              pollsData.push(result.data);
+            }
+          } catch (err) {
+            console.error("Error fetching poll", i, ":", err);
           }
         }
-        setPolls(pollsData.filter(poll => poll && poll.isActive));
-      } catch (error) {
-        console.error('Error loading polls:', error);
+
+        const activePolls = pollsData.filter(poll => poll && poll.isActive);
+        console.log("Active polls:", activePolls.length);
+        setPolls(activePolls);
+      } catch (err) {
+        console.error("Error fetching polls:", err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    loadPolls();
-  }, [pollCount]);
+    if (address) {
+      fetchPolls();
+    }
+  }, [pollCount, address]);
+
+  if (!address) {
+    return (
+      <Alert status="info">
+        <AlertIcon />
+        Please connect your wallet to view polls
+      </Alert>
+    );
+  }
 
   if (loading) {
     return (
@@ -236,13 +228,34 @@ const PollList = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Alert status="error">
+        <AlertIcon />
+        Error loading polls: {error}
+      </Alert>
+    );
+  }
+
+  if (isPollCountError) {
+    return (
+      <Alert status="error">
+        <AlertIcon />
+        Error fetching poll count
+      </Alert>
+    );
+  }
+
   return (
     <VStack spacing={6} align="stretch">
       <Heading size="lg">Active Polls</Heading>
       {polls.length === 0 ? (
-        <Text>No active polls found</Text>
+        <Alert status="info">
+          <AlertIcon />
+          No active polls found. Create one!
+        </Alert>
       ) : (
-        polls.map((poll, index) => (
+        polls.map((poll) => (
           <PollCard key={poll.id} poll={poll} />
         ))
       )}
