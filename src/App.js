@@ -4,18 +4,24 @@ import { EthereumClient, w3mConnectors, w3mProvider } from '@web3modal/ethereum'
 import { Web3Modal } from '@web3modal/react';
 import { configureChains, createConfig, WagmiConfig } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
+import { publicProvider } from 'wagmi/providers/public';
 import Navbar from './components/Navbar';
 import PollList from './components/PollList';
 import CreatePoll from './components/CreatePoll';
 
-const chains = [sepolia];
 const projectId = process.env.REACT_APP_WALLET_CONNECT_PROJECT_ID;
+const chains = [sepolia];
 
-const { publicClient } = configureChains(chains, [w3mProvider({ projectId })]);
+const { publicClient, webSocketPublicClient } = configureChains(
+  chains,
+  [w3mProvider({ projectId }), publicProvider()]
+);
+
 const wagmiConfig = createConfig({
   autoConnect: true,
-  connectors: w3mConnectors({ projectId, chains }),
-  publicClient
+  connectors: w3mConnectors({ chains, projectId }),
+  publicClient,
+  webSocketPublicClient
 });
 
 const ethereumClient = new EthereumClient(wagmiConfig, chains);
@@ -36,7 +42,12 @@ function App() {
           </Box>
         </ChakraProvider>
       </WagmiConfig>
-      <Web3Modal projectId={projectId} ethereumClient={ethereumClient} />
+      <Web3Modal
+        projectId={projectId}
+        ethereumClient={ethereumClient}
+        defaultChain={sepolia}
+        themeMode="light"
+      />
     </>
   );
 }
