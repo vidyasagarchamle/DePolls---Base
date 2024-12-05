@@ -7,19 +7,19 @@ async function main() {
   // Deploy DePollsToken
   const DePollsToken = await hre.ethers.getContractFactory("DePollsToken");
   const token = await DePollsToken.deploy();
-  await token.waitForDeployment();
-  const tokenAddress = await token.getAddress();
+  await token.deployed();
+  const tokenAddress = token.address;
   console.log("DePollsToken deployed to:", tokenAddress);
 
   // Deploy DePolls with token address
   const DePolls = await hre.ethers.getContractFactory("DePolls");
   const polls = await DePolls.deploy(tokenAddress);
-  await polls.waitForDeployment();
-  const pollsAddress = await polls.getAddress();
+  await polls.deployed();
+  const pollsAddress = polls.address;
   console.log("DePolls deployed to:", pollsAddress);
 
   // Transfer some tokens to the polls contract for rewards
-  const amount = hre.ethers.parseEther("100000");
+  const amount = hre.ethers.utils.parseEther("100000");
   await token.transfer(pollsAddress, amount);
   console.log("Transferred reward tokens to polls contract");
 
