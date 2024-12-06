@@ -25,7 +25,7 @@ import { DePollsABI } from '../contracts/abis';
 
 const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
 
-const CreatePoll = () => {
+const CreatePoll = ({ onPollCreated }) => {
   const { isOpen, onToggle } = useDisclosure();
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
@@ -43,7 +43,7 @@ const CreatePoll = () => {
     enabled: question.trim() !== '' && options.filter(opt => opt.trim()).length >= 2,
   });
 
-  const { write: createPoll, isLoading } = useContractWrite({
+  const { write: createPoll, isLoading, data: txData } = useContractWrite({
     ...config,
     onSuccess: (data) => {
       const toastId = toast({
@@ -54,24 +54,43 @@ const CreatePoll = () => {
         isClosable: false,
       });
 
-      data.wait().then(() => {
-        toast.close(toastId);
-        toast({
-          title: 'Poll Created!',
-          description: 'Your poll has been created successfully.',
-          status: 'success',
-          duration: 5000,
-        });
-        resetForm();
-      }).catch((error) => {
-        toast.close(toastId);
-        toast({
-          title: 'Error',
-          description: 'Failed to create poll. Please try again.',
-          status: 'error',
-          duration: 5000,
-        });
-      });
+      // Wait for transaction confirmation
+      const waitForTransaction = async () => {
+        try {
+          const receipt = await data.wait();
+          toast.close(toastId);
+          
+          if (receipt.status === 1) {
+            toast({
+              title: 'Poll Created!',
+              description: 'Your poll has been created successfully.',
+              status: 'success',
+              duration: 5000,
+            });
+            resetForm();
+            if (onPollCreated) {
+              onPollCreated();
+            }
+          } else {
+            toast({
+              title: 'Error',
+              description: 'Transaction failed. Please try again.',
+              status: 'error',
+              duration: 5000,
+            });
+          }
+        } catch (error) {
+          toast.close(toastId);
+          toast({
+            title: 'Error',
+            description: 'Failed to create poll. Please try again.',
+            status: 'error',
+            duration: 5000,
+          });
+        }
+      };
+
+      waitForTransaction();
     },
     onError: (error) => {
       toast({

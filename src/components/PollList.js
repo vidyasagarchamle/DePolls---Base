@@ -36,6 +36,7 @@ import { DeleteIcon, TimeIcon, CheckIcon } from '@chakra-ui/icons';
 import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI } from '../contracts/abis';
+import CreatePoll from './CreatePoll';
 
 const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
 
@@ -102,6 +103,11 @@ function PollList() {
     fetchPolls();
   }, [address, pollCount]);
 
+  const handlePollUpdate = () => {
+    refetchPollCount();
+    fetchPolls();
+  };
+
   if (!address) {
     return (
       <Container maxW={containerWidth} py={8}>
@@ -126,6 +132,7 @@ function PollList() {
   if (loading) {
     return (
       <Container maxW={containerWidth} py={8}>
+        <CreatePoll onPollCreated={handlePollUpdate} />
         <VStack spacing={6} align="stretch">
           <Heading size="lg">Active Polls</Heading>
           <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
@@ -142,6 +149,7 @@ function PollList() {
 
   return (
     <Container maxW={containerWidth} py={8}>
+      <CreatePoll onPollCreated={handlePollUpdate} />
       <VStack spacing={8} align="stretch">
         <HStack justify="space-between" wrap="wrap" spacing={4}>
           <Heading size="lg">Active Polls</Heading>
@@ -171,8 +179,7 @@ function PollList() {
               <PollCard 
                 key={poll.id} 
                 poll={poll} 
-                onPollUpdate={fetchPolls}
-                refetchPollCount={refetchPollCount}
+                onPollUpdate={handlePollUpdate}
               />
             ))}
           </SimpleGrid>
@@ -182,7 +189,7 @@ function PollList() {
   );
 }
 
-const PollCard = ({ poll, onPollUpdate, refetchPollCount }) => {
+const PollCard = ({ poll, onPollUpdate }) => {
   const { address } = useAccount();
   const toast = useToast();
   const [selectedOptions, setSelectedOptions] = useState([]);
@@ -219,25 +226,40 @@ const PollCard = ({ poll, onPollUpdate, refetchPollCount }) => {
         isClosable: false,
       });
 
-      data.wait().then(() => {
-        toast.close(toastId);
-        toast({
-          title: 'Success!',
-          description: 'Your vote has been recorded successfully.',
-          status: 'success',
-          duration: 5000,
-        });
-        setSelectedOptions([]);
-        onPollUpdate();
-      }).catch((error) => {
-        toast.close(toastId);
-        toast({
-          title: 'Error',
-          description: 'Failed to submit vote. Please try again.',
-          status: 'error',
-          duration: 5000,
-        });
-      });
+      const waitForTransaction = async () => {
+        try {
+          const receipt = await data.wait();
+          toast.close(toastId);
+          
+          if (receipt.status === 1) {
+            toast({
+              title: 'Success!',
+              description: 'Your vote has been recorded successfully.',
+              status: 'success',
+              duration: 5000,
+            });
+            setSelectedOptions([]);
+            onPollUpdate();
+          } else {
+            toast({
+              title: 'Error',
+              description: 'Transaction failed. Please try again.',
+              status: 'error',
+              duration: 5000,
+            });
+          }
+        } catch (error) {
+          toast.close(toastId);
+          toast({
+            title: 'Error',
+            description: 'Failed to submit vote. Please try again.',
+            status: 'error',
+            duration: 5000,
+          });
+        }
+      };
+
+      waitForTransaction();
     },
     onError: (error) => {
       toast({
@@ -268,25 +290,47 @@ const PollCard = ({ poll, onPollUpdate, refetchPollCount }) => {
         isClosable: false,
       });
 
-      data.wait().then(() => {
-        toast.close(toastId);
-        toast({
-          title: 'Success!',
-          description: 'Poll has been closed successfully.',
-          status: 'success',
-          duration: 5000,
-        });
-        onClose();
-        onPollUpdate();
-        refetchPollCount();
-      }).catch((error) => {
-        toast.close(toastId);
-        toast({
-          title: 'Error',
-          description: 'Failed to close poll. Please try again.',
-          status: 'error',
-          duration: 5000,
-        });
+      const waitForTransaction = async () => {
+        try {
+          const receipt = await data.wait();
+          toast.close(toastId);
+          
+          if (receipt.status === 1) {
+            toast({
+              title: 'Success!',
+              description: 'Poll has been closed successfully.',
+              status: 'success',
+              duration: 5000,
+            });
+            onClose();
+            onPollUpdate();
+          } else {
+            toast({
+              title: 'Error',
+              description: 'Transaction failed. Please try again.',
+              status: 'error',
+              duration: 5000,
+            });
+          }
+        } catch (error) {
+          toast.close(toastId);
+          toast({
+            title: 'Error',
+            description: 'Failed to close poll. Please try again.',
+            status: 'error',
+            duration: 5000,
+          });
+        }
+      };
+
+      waitForTransaction();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to close poll',
+        status: 'error',
+        duration: 5000,
       });
     },
   });
