@@ -9,10 +9,15 @@ import {
   AlertIcon,
   Heading,
   SimpleGrid,
-  Skeleton,
   HStack,
   Badge,
   Center,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { useContractRead, useAccount } from 'wagmi';
 import { ethers } from 'ethers';
@@ -26,6 +31,7 @@ function PollList() {
   const [polls, setPolls] = useState([]);
   const [loading, setLoading] = useState(true);
   const containerWidth = { base: "95%", md: "90%", lg: "80%" };
+  const tabBg = useColorModeValue('white', 'gray.800');
 
   // Get poll count from contract
   const { data: pollCount, isError: isPollCountError } = useContractRead({
@@ -52,6 +58,7 @@ function PollList() {
   const fetchPoll = async (id, contract) => {
     try {
       const poll = await contract.getPoll(id);
+      const hasVoted = await contract.hasVoted(id, address);
       
       // Verify that we got valid poll data
       if (!poll || !poll.question) {
@@ -71,7 +78,9 @@ function PollList() {
         deadline: safeToNumber(poll.deadline),
         isWeighted: poll.isWeighted,
         isMultipleChoice: poll.isMultipleChoice,
-        isActive: poll.isActive
+        isActive: poll.isActive,
+        hasVoted: hasVoted,
+        isCreator: poll.creator.toLowerCase() === address?.toLowerCase()
       };
     } catch (error) {
       console.error(`Error fetching poll ${id}:`, error);
@@ -100,7 +109,7 @@ function PollList() {
       }
 
       const fetchedPolls = (await Promise.all(pollPromises))
-        .filter(poll => poll !== null && poll.isActive);
+        .filter(poll => poll !== null);
 
       console.log('Fetched polls:', fetchedPolls);
       setPolls(fetchedPolls);
@@ -118,7 +127,6 @@ function PollList() {
     }
   };
 
-  // Effect to fetch polls when address or pollCount changes
   useEffect(() => {
     if (isPollCountError) {
       toast({
@@ -135,7 +143,6 @@ function PollList() {
     fetchPolls();
   }, [address, pollCount, isPollCountError]);
 
-  // Handler for poll updates
   const handlePollUpdate = () => {
     fetchPolls();
   };
@@ -178,52 +185,97 @@ function PollList() {
     );
   }
 
-  // Filter active polls
+  // Filter polls
   const activePolls = polls.filter(poll => {
     const deadline = new Date(poll.deadline * 1000);
     const now = new Date();
-    return poll.isActive && deadline > now;
+    return poll.isActive && deadline > now && !poll.isCreator;
   });
+
+  const myPolls = polls.filter(poll => poll.isCreator);
 
   // Render main content
   return (
     <Container maxW={containerWidth} py={8}>
       <CreatePoll onPollCreated={handlePollUpdate} />
-      <VStack spacing={8} align="stretch">
-        <HStack justify="space-between" wrap="wrap" spacing={4}>
-          <Heading size="lg">Active Polls</Heading>
-          <Badge colorScheme="brand" p={2} borderRadius="lg" fontSize="md">
-            Active Polls: {activePolls.length}
-          </Badge>
-        </HStack>
+      <Tabs variant="enclosed" colorScheme="brand" mt={8}>
+        <TabList bg={tabBg} borderRadius="xl" p={2}>
+          <Tab _selected={{ bg: 'brand.500', color: 'white' }}>
+            Active Polls ({activePolls.length})
+          </Tab>
+          <Tab _selected={{ bg: 'brand.500', color: 'white' }}>
+            My Polls ({myPolls.length})
+          </Tab>
+        </TabList>
 
-        {activePolls.length === 0 ? (
-          <Alert
-            status="info"
-            variant="subtle"
-            flexDirection="column"
-            alignItems="center"
-            justifyContent="center"
-            textAlign="center"
-            height="200px"
-            borderRadius="xl"
-          >
-            <AlertIcon boxSize="40px" mb={4} />
-            <Heading size="md" mb={2}>No Active Polls</Heading>
-            <Text>Create a new poll to get started!</Text>
-          </Alert>
-        ) : (
-          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-            {activePolls.map((poll) => (
-              <Poll 
-                key={poll.id} 
-                poll={poll} 
-                onVote={handlePollUpdate}
-              />
-            ))}
-          </SimpleGrid>
-        )}
-      </VStack>
+        <TabPanels>
+          {/* Active Polls Panel */}
+          <TabPanel p={0} pt={6}>
+            <VStack spacing={8} align="stretch">
+              {activePolls.length === 0 ? (
+                <Alert
+                  status="info"
+                  variant="subtle"
+                  flexDirection="column"
+                  alignItems="center"
+                  justifyContent="center"
+                  textAlign="center"
+                  height="200px"
+                  borderRadius="xl"
+                >
+                  <AlertIcon boxSize="40px" mb={4} />
+                  <Heading size="md" mb={2}>No Active Polls</Heading>
+                  <Text>There are no active polls to vote on at the moment.</Text>
+                </Alert>
+              ) : (
+                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                  {activePolls.map((poll) => (
+                    <Poll 
+                      key={poll.id} 
+                      poll={poll} 
+                      onVote={handlePollUpdate}
+                      showVoterDetails={false}
+                    />
+                  ))}
+                </SimpleGrid>
+              )}
+            </VStack>
+          </TabPanel>
+
+          {/* My Polls Panel */}
+          <TabPanel p={0} pt={6}>
+            <VStack spacing={8} align="stretch">
+              {myPolls.length === 0 ? (
+                <Alert
+                  status="info"
+                  variant="subtle"
+                  flexDirection="column"
+                  alignItems="center"
+                  justifyContent="center"
+                  textAlign="center"
+                  height="200px"
+                  borderRadius="xl"
+                >
+                  <AlertIcon boxSize="40px" mb={4} />
+                  <Heading size="md" mb={2}>No Created Polls</Heading>
+                  <Text>You haven't created any polls yet. Create one to get started!</Text>
+                </Alert>
+              ) : (
+                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                  {myPolls.map((poll) => (
+                    <Poll 
+                      key={poll.id} 
+                      poll={poll} 
+                      onVote={handlePollUpdate}
+                      showVoterDetails={true}
+                    />
+                  ))}
+                </SimpleGrid>
+              )}
+            </VStack>
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
     </Container>
   );
 }
