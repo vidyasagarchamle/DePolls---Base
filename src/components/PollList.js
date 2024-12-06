@@ -1,51 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
   VStack,
-  Heading,
   Text,
-  Button,
-  RadioGroup,
-  Radio,
-  Checkbox,
-  Stack,
+  Spinner,
   useToast,
-  Alert,
-  AlertIcon,
-  Code,
-  HStack,
-  Badge,
-  IconButton,
-  useDisclosure,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Divider,
-  Flex,
-  Tooltip,
-  Progress,
-  Container,
-  Skeleton,
-  SimpleGrid,
-  useBreakpointValue,
 } from '@chakra-ui/react';
-import { DeleteIcon, TimeIcon, CheckIcon } from '@chakra-ui/icons';
-import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
-import { ethers } from 'ethers';
-import { DePollsABI } from '../contracts/abis';
+import { useContractRead, useAccount } from 'wagmi';
+import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
+import Poll from './Poll';
 import CreatePoll from './CreatePoll';
-
-const POLLS_CONTRACT_ADDRESS = "0x148929b6F90952d2a5dAa234D58B0443167024E4";
 
 function PollList() {
   const { address } = useAccount();
   const toast = useToast();
   const [polls, setPolls] = useState([]);
   const [loading, setLoading] = useState(true);
-  const containerWidth = useBreakpointValue({ base: "95%", md: "90%", lg: "80%" });
 
   const { data: pollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
