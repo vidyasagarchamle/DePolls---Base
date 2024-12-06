@@ -17,6 +17,7 @@ import {
 import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { DePollsABI } from '../contracts/abis';
 import { Bar } from 'react-chartjs-2';
+import { ethers } from 'ethers';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -37,6 +38,7 @@ ChartJS.register(
 );
 
 const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
+const SEPOLIA_RPC = "https://eth-sepolia.g.alchemy.com/v2/WOkDJG0SS7qXPGXTZ72ib-4O_Ie9FFbY";
 
 const PollCard = ({ poll }) => {
   const { address } = useAccount();
@@ -171,15 +173,6 @@ const PollList = () => {
     watch: true,
   });
 
-  // Get poll data
-  const { data: pollData } = useContractRead({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'getPoll',
-    args: [0],
-    watch: true,
-  });
-
   useEffect(() => {
     const loadPolls = async () => {
       try {
@@ -192,62 +185,43 @@ const PollList = () => {
         }
 
         console.log('Total polls:', pollCount.toString());
-        console.log('Sample poll data:', pollData);
 
+        // Create ethers provider and contract instance
+        const provider = new ethers.providers.JsonRpcProvider(SEPOLIA_RPC);
+        const contract = new ethers.Contract(POLLS_CONTRACT_ADDRESS, DePollsABI, provider);
+
+        // Fetch all polls
         const fetchedPolls = [];
         for (let i = 0; i < Number(pollCount); i++) {
           try {
-            const result = await fetch(
-              `https://eth-sepolia.g.alchemy.com/v2/WOkDJG0SS7qXPGXTZ72ib-4O_Ie9FFbY`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  jsonrpc: '2.0',
-                  id: 1,
-                  method: 'eth_call',
-                  params: [
-                    {
-                      to: POLLS_CONTRACT_ADDRESS,
-                      data: `0x${DePollsABI
-                        .find(item => item.name === 'getPoll')
-                        .inputs[0]
-                        .type}${i.toString(16).padStart(64, '0')}`,
-                    },
-                    'latest',
-                  ],
-                }),
-              }
-            );
+            const pollData = await contract.getPoll(i);
+            console.log(`Raw poll ${i} data:`, pollData);
 
-            const data = await result.json();
-            console.log(`Poll ${i} raw data:`, data);
+            // Convert BigNumber values to numbers
+            const poll = {
+              id: pollData.id.toNumber(),
+              creator: pollData.creator,
+              question: pollData.question,
+              deadline: pollData.deadline.toNumber(),
+              isWeighted: pollData.isWeighted,
+              isMultipleChoice: pollData.isMultipleChoice,
+              isActive: pollData.isActive,
+              options: pollData.options.map(opt => ({
+                text: opt.text,
+                voteCount: opt.voteCount.toNumber()
+              }))
+            };
 
-            if (data.result) {
-              const poll = {
-                id: i,
-                creator: `0x${data.result.slice(26, 66)}`,
-                question: data.result.slice(66, 130),
-                deadline: parseInt(data.result.slice(130, 194), 16),
-                isWeighted: data.result.slice(194, 258) === '1',
-                isMultipleChoice: data.result.slice(258, 322) === '1',
-                isActive: data.result.slice(322, 386) === '1',
-                options: JSON.parse(data.result.slice(386)),
-              };
-
-              if (poll.isActive) {
-                console.log(`Poll ${i} processed:`, poll);
-                fetchedPolls.push(poll);
-              }
+            console.log(`Processed poll ${i}:`, poll);
+            if (poll.isActive) {
+              fetchedPolls.push(poll);
             }
           } catch (err) {
             console.error(`Error fetching poll ${i}:`, err);
           }
         }
 
-        console.log('All fetched polls:', fetchedPolls);
+        console.log('Active polls:', fetchedPolls);
         setPolls(fetchedPolls);
       } catch (err) {
         console.error('Error loading polls:', err);
@@ -260,7 +234,7 @@ const PollList = () => {
     if (address && pollCount) {
       loadPolls();
     }
-  }, [address, pollCount, pollData]);
+  }, [address, pollCount]);
 
   if (!address) {
     return (
