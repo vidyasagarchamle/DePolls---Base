@@ -33,19 +33,23 @@ const CreatePoll = ({ onPollCreated }) => {
   const [isWeighted, setIsWeighted] = useState(false);
   const toast = useToast();
 
-  const deadline = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60; // 7 days from now
+  // 7 days from now in seconds
+  const deadline = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
 
-  const { config } = usePrepareContractWrite({
+  // Filter out empty options and trim whitespace
+  const validOptions = options.map(opt => opt.trim()).filter(opt => opt !== '');
+
+  const { config, error: prepareError } = usePrepareContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'createPoll',
-    args: [question, options.filter(opt => opt.trim()), deadline, isWeighted, isMultipleChoice],
-    enabled: question.trim() !== '' && options.filter(opt => opt.trim()).length >= 2,
+    args: [question.trim(), validOptions, deadline, isWeighted, isMultipleChoice],
+    enabled: question.trim() !== '' && validOptions.length >= 2,
   });
 
   const { write: createPoll, isLoading, data: txData } = useContractWrite({
     ...config,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       const toastId = toast({
         title: 'Creating Poll...',
         description: 'Please wait while your transaction is being processed.',
@@ -54,43 +58,39 @@ const CreatePoll = ({ onPollCreated }) => {
         isClosable: false,
       });
 
-      // Wait for transaction confirmation
-      const waitForTransaction = async () => {
-        try {
-          const receipt = await data.wait();
-          toast.close(toastId);
-          
-          if (receipt.status === 1) {
-            toast({
-              title: 'Poll Created!',
-              description: 'Your poll has been created successfully.',
-              status: 'success',
-              duration: 5000,
-            });
-            resetForm();
-            if (onPollCreated) {
-              onPollCreated();
-            }
-          } else {
-            toast({
-              title: 'Error',
-              description: 'Transaction failed. Please try again.',
-              status: 'error',
-              duration: 5000,
-            });
+      try {
+        const receipt = await data.wait();
+        toast.close(toastId);
+        
+        if (receipt.status === 1) {
+          toast({
+            title: 'Poll Created!',
+            description: 'Your poll has been created successfully.',
+            status: 'success',
+            duration: 5000,
+          });
+          resetForm();
+          if (onPollCreated) {
+            onPollCreated();
           }
-        } catch (error) {
-          toast.close(toastId);
+        } else {
           toast({
             title: 'Error',
-            description: 'Failed to create poll. Please try again.',
+            description: 'Transaction failed. Please try again.',
             status: 'error',
             duration: 5000,
           });
         }
-      };
-
-      waitForTransaction();
+      } catch (error) {
+        toast.close(toastId);
+        toast({
+          title: 'Error',
+          description: 'Failed to create poll. Please try again.',
+          status: 'error',
+          duration: 5000,
+        });
+        console.error('Transaction error:', error);
+      }
     },
     onError: (error) => {
       toast({
@@ -99,6 +99,7 @@ const CreatePoll = ({ onPollCreated }) => {
         status: 'error',
         duration: 5000,
       });
+      console.error('Contract error:', error);
     },
   });
 
@@ -130,9 +131,22 @@ const CreatePoll = ({ onPollCreated }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!createPoll) return;
+    if (!createPoll) {
+      if (prepareError) {
+        toast({
+          title: 'Error',
+          description: prepareError.message || 'Failed to prepare transaction',
+          status: 'error',
+          duration: 5000,
+        });
+        console.error('Prepare error:', prepareError);
+      }
+      return;
+    }
     createPoll();
   };
+
+  const isFormValid = question.trim() !== '' && validOptions.length >= 2;
 
   return (
     <Card variant="outline" width="100%" mb={8}>
@@ -216,11 +230,17 @@ const CreatePoll = ({ onPollCreated }) => {
                 </FormControl>
               </HStack>
 
+              {prepareError && (
+                <Text color="red.500" fontSize="sm">
+                  {prepareError.message}
+                </Text>
+              )}
+
               <Button
                 type="submit"
                 colorScheme="brand"
                 isLoading={isLoading}
-                isDisabled={!createPoll || question.trim() === '' || options.filter(opt => opt.trim()).length < 2}
+                isDisabled={!isFormValid || !createPoll}
                 loadingText="Creating Poll..."
               >
                 Create Poll

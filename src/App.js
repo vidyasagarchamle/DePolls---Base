@@ -7,7 +7,6 @@ import { sepolia } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
 import Navbar from './components/Navbar';
 import PollList from './components/PollList';
-import CreatePoll from './components/CreatePoll';
 import theme from './theme';
 
 // Hardcode the project ID for now
@@ -46,7 +45,6 @@ function App() {
             <Navbar />
             <Container maxW="container.xl" py={8}>
               <VStack spacing={8} w="full">
-                <CreatePoll />
                 <PollList />
               </VStack>
             </Container>
