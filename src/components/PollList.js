@@ -224,7 +224,12 @@ const PollList = () => {
           .filter(poll => {
             if (!poll) return false;
             console.log('Processing poll:', poll);
-            return true;
+            return (
+              poll.id !== undefined &&
+              poll.options !== undefined &&
+              Array.isArray(poll.options) &&
+              poll.isActive
+            );
           })
           .map(poll => {
             try {
@@ -236,17 +241,17 @@ const PollList = () => {
                 isWeighted: poll.isWeighted,
                 isMultipleChoice: poll.isMultipleChoice,
                 isActive: poll.isActive,
-                options: Array.isArray(poll.options) ? poll.options.map(opt => ({
+                options: poll.options.map(opt => ({
                   text: opt.text,
                   voteCount: Number(opt.voteCount)
-                })) : []
+                }))
               };
             } catch (err) {
-              console.error('Error processing poll:', err);
+              console.error('Error processing poll:', poll, err);
               return null;
             }
           })
-          .filter(poll => poll && poll.isActive);
+          .filter(poll => poll !== null);
 
         console.log('Processed polls:', allPolls);
         setPolls(allPolls);
