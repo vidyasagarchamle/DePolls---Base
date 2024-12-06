@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Box,
   Button,
   FormControl,
   FormLabel,
@@ -77,57 +76,11 @@ const CreatePoll = ({ onPollCreated }) => {
     onError: (error) => {
       toast({
         title: 'Error',
-    onSuccess: async (data) => {
-      const toastId = toast({
-        title: 'Creating Poll...',
-        description: 'Please wait while your transaction is being processed.',
-        status: 'info',
-        duration: null,
-        isClosable: false,
-      });
-
-      try {
-        const receipt = await data.wait();
-        toast.close(toastId);
-        
-        if (receipt.status === 1) {
-          toast({
-            title: 'Poll Created!',
-            description: 'Your poll has been created successfully.',
-            status: 'success',
-            duration: 5000,
-          });
-          resetForm();
-          if (onPollCreated) {
-            onPollCreated();
-          }
-        } else {
-          toast({
-            title: 'Error',
-            description: 'Transaction failed. Please try again.',
-            status: 'error',
-            duration: 5000,
-          });
-        }
-      } catch (error) {
-        toast.close(toastId);
-        toast({
-          title: 'Error',
-          description: 'Failed to create poll. Please try again.',
-          status: 'error',
-          duration: 5000,
-        });
-        console.error('Transaction error:', error);
-      }
-    },
-    onError: (error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create poll',
+        description: 'Failed to create poll. Please try again.',
         status: 'error',
         duration: 5000,
       });
-      console.error('Contract error:', error);
+      console.error('Transaction error:', error);
     },
   });
 
@@ -171,10 +124,21 @@ const CreatePoll = ({ onPollCreated }) => {
       }
       return;
     }
+
+    toast({
+      title: 'Creating Poll...',
+      description: 'Please wait while your transaction is being processed.',
+      status: 'info',
+      duration: null,
+      isClosable: false,
+      id: 'creating-poll',
+    });
+
     createPoll();
   };
 
   const isFormValid = question.trim() !== '' && validOptions.length >= 2;
+  const isLoading = isCreating || isWaiting;
 
   return (
     <Card variant="outline" width="100%" mb={8}>
@@ -269,7 +233,7 @@ const CreatePoll = ({ onPollCreated }) => {
                 colorScheme="brand"
                 isLoading={isLoading}
                 isDisabled={!isFormValid || !createPoll}
-                loadingText="Creating Poll..."
+                loadingText={isWaiting ? 'Creating Poll...' : 'Preparing...'}
               >
                 Create Poll
               </Button>
