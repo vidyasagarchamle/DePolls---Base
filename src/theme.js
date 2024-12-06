@@ -2,29 +2,29 @@ import { extendTheme } from '@chakra-ui/react';
 
 const theme = extendTheme({
   config: {
-    initialColorMode: 'dark',
+    initialColorMode: 'light',
     useSystemColorMode: false,
   },
   styles: {
     global: {
       body: {
-        bg: 'gray.900',
-        color: 'whiteAlpha.900',
+        bg: 'gray.50',
+        color: 'gray.800',
       },
     },
   },
   colors: {
     brand: {
-      50: '#f0e4ff',
-      100: '#cbb2ff',
-      200: '#a480ff',
-      300: '#7c4dff',
-      400: '#541aff',
-      500: '#3b00e6',
-      600: '#2d00b4',
-      700: '#1f0082',
-      800: '#110050',
-      900: '#06001f',
+      50: '#e6f0ff',
+      100: '#b3d1ff',
+      200: '#80b3ff',
+      300: '#4d94ff',
+      400: '#1a75ff',
+      500: '#0066ff',
+      600: '#0052cc',
+      700: '#003d99',
+      800: '#002966',
+      900: '#001433',
     },
   },
   components: {
@@ -46,45 +46,26 @@ const theme = extendTheme({
           transition: 'all 0.2s',
         },
         ghost: {
-          color: 'whiteAlpha.900',
+          color: 'gray.600',
           _hover: {
-            bg: 'whiteAlpha.200',
+            bg: 'gray.100',
           },
         },
-      },
-    },
-    Box: {
-      baseStyle: {
-        borderRadius: 'xl',
-      },
-    },
-    Container: {
-      baseStyle: {
-        maxW: 'container.xl',
-      },
-    },
-    Heading: {
-      baseStyle: {
-        color: 'whiteAlpha.900',
-      },
-    },
-    Text: {
-      baseStyle: {
-        color: 'whiteAlpha.800',
       },
     },
     Card: {
       baseStyle: {
         container: {
-          bg: 'gray.800',
+          bg: 'white',
           borderRadius: 'xl',
           borderWidth: '1px',
-          borderColor: 'gray.700',
-          boxShadow: 'xl',
+          borderColor: 'gray.200',
+          boxShadow: 'sm',
           p: 6,
           _hover: {
             borderColor: 'brand.500',
             transform: 'translateY(-2px)',
+            boxShadow: 'md',
             transition: 'all 0.2s',
           },
         },
@@ -94,9 +75,9 @@ const theme = extendTheme({
       variants: {
         subtle: {
           container: {
-            bg: 'gray.800',
+            bg: 'white',
             borderWidth: '1px',
-            borderColor: 'gray.700',
+            borderColor: 'gray.200',
             borderRadius: 'xl',
           },
         },
@@ -105,21 +86,19 @@ const theme = extendTheme({
     Modal: {
       baseStyle: {
         overlay: {
-          bg: 'blackAlpha.800',
-          backdropFilter: 'blur(5px)',
+          bg: 'blackAlpha.600',
+          backdropFilter: 'blur(4px)',
         },
         dialog: {
-          bg: 'gray.800',
+          bg: 'white',
           borderRadius: 'xl',
-          borderWidth: '1px',
-          borderColor: 'gray.700',
-          boxShadow: '2xl',
+          boxShadow: 'xl',
         },
       },
     },
     Tooltip: {
       baseStyle: {
-        bg: 'gray.700',
+        bg: 'gray.800',
         color: 'white',
         borderRadius: 'md',
       },
@@ -132,19 +111,13 @@ const theme = extendTheme({
         textTransform: 'none',
         fontWeight: 'medium',
       },
-      variants: {
-        subtle: {
-          bg: 'whiteAlpha.200',
-          color: 'whiteAlpha.900',
-        },
-      },
     },
     Input: {
       variants: {
         outline: {
           field: {
-            bg: 'gray.800',
-            borderColor: 'gray.600',
+            bg: 'white',
+            borderColor: 'gray.300',
             _hover: {
               borderColor: 'brand.500',
             },
@@ -159,7 +132,7 @@ const theme = extendTheme({
     Checkbox: {
       baseStyle: {
         control: {
-          borderColor: 'gray.600',
+          borderColor: 'gray.300',
           _checked: {
             bg: 'brand.500',
             borderColor: 'brand.500',
@@ -170,27 +143,10 @@ const theme = extendTheme({
     Radio: {
       baseStyle: {
         control: {
-          borderColor: 'gray.600',
+          borderColor: 'gray.300',
           _checked: {
             bg: 'brand.500',
             borderColor: 'brand.500',
-          },
-        },
-      },
-    },
-    Select: {
-      variants: {
-        outline: {
-          field: {
-            bg: 'gray.800',
-            borderColor: 'gray.600',
-            _hover: {
-              borderColor: 'brand.500',
-            },
-            _focus: {
-              borderColor: 'brand.500',
-              boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)',
-            },
           },
         },
       },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   VStack,
@@ -26,31 +26,13 @@ import {
   Divider,
   Flex,
   Tooltip,
+  Progress,
+  Container,
   Skeleton,
 } from '@chakra-ui/react';
 import { DeleteIcon, TimeIcon, CheckIcon } from '@chakra-ui/icons';
 import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { DePollsABI } from '../contracts/abis';
-import { Bar } from 'react-chartjs-2';
-import { ethers } from 'ethers';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip as ChartTooltip,
-  Legend,
-} from 'chart.js';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  ChartTooltip,
-  Legend
-);
 
 const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
 
@@ -61,7 +43,7 @@ function PollList() {
   const { data: pollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
-    functionName: 'getPollCount',
+    functionName: 'pollCount',
     watch: true,
   });
 
@@ -74,42 +56,74 @@ function PollList() {
 
   if (!address) {
     return (
-      <Alert status="warning" variant="subtle" borderRadius="xl">
-        <AlertIcon />
-        Please connect your wallet to view and participate in polls.
-      </Alert>
+      <Container maxW="container.lg" py={8}>
+        <Alert
+          status="info"
+          variant="subtle"
+          flexDirection="column"
+          alignItems="center"
+          justifyContent="center"
+          textAlign="center"
+          height="200px"
+          borderRadius="xl"
+        >
+          <AlertIcon boxSize="40px" mb={4} />
+          <Heading size="md" mb={2}>Connect Your Wallet</Heading>
+          <Text>Please connect your wallet to view and participate in polls</Text>
+        </Alert>
+      </Container>
     );
   }
 
   if (isLoadingPolls) {
     return (
-      <VStack spacing={4} w="full">
-        <Heading size="lg" mb={4}>Active Polls</Heading>
-        {[1, 2, 3].map((i) => (
-          <Skeleton key={i} height="200px" w="full" borderRadius="xl" />
-        ))}
-      </VStack>
+      <Container maxW="container.lg" py={8}>
+        <VStack spacing={6} align="stretch">
+          <Heading size="lg">Active Polls</Heading>
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} height="200px" borderRadius="xl" />
+          ))}
+        </VStack>
+      </Container>
     );
   }
 
   const activePolls = polls.filter(poll => poll.isActive && new Date(Number(poll.deadline) * 1000) > new Date());
 
-  if (activePolls.length === 0) {
-    return (
-      <Alert status="info" variant="subtle" borderRadius="xl">
-        <AlertIcon />
-        No active polls available. Create a new poll to get started!
-      </Alert>
-    );
-  }
-
   return (
-    <VStack spacing={6} w="full">
-      <Heading size="lg">Active Polls</Heading>
-      {activePolls.map((poll, index) => (
-        <PollCard key={index} poll={poll} />
-      ))}
-    </VStack>
+    <Container maxW="container.lg" py={8}>
+      <VStack spacing={6} align="stretch">
+        <HStack justify="space-between">
+          <Heading size="lg">Active Polls</Heading>
+          <Badge colorScheme="brand" p={2} borderRadius="lg">
+            Total Polls: {pollCount?.toString() || '0'}
+          </Badge>
+        </HStack>
+
+        {activePolls.length === 0 ? (
+          <Alert
+            status="info"
+            variant="subtle"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            textAlign="center"
+            height="200px"
+            borderRadius="xl"
+          >
+            <AlertIcon boxSize="40px" mb={4} />
+            <Heading size="md" mb={2}>No Active Polls</Heading>
+            <Text>Create a new poll to get started!</Text>
+          </Alert>
+        ) : (
+          <VStack spacing={6}>
+            {activePolls.map((poll) => (
+              <PollCard key={poll.id} poll={poll} />
+            ))}
+          </VStack>
+        )}
+      </VStack>
+    </Container>
   );
 }
 
@@ -144,9 +158,9 @@ const PollCard = ({ poll }) => {
     onSuccess: () => {
       toast({
         title: 'Success',
-        description: 'Vote submitted successfully',
+        description: 'Your vote has been recorded!',
         status: 'success',
-        duration: 3000,
+        duration: 5000,
       });
     },
     onError: (error) => {
@@ -154,7 +168,7 @@ const PollCard = ({ poll }) => {
         title: 'Error',
         description: error.message || 'Failed to submit vote',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
       });
     },
   });
@@ -172,19 +186,11 @@ const PollCard = ({ poll }) => {
     onSuccess: () => {
       toast({
         title: 'Success',
-        description: 'Poll closed successfully',
+        description: 'Poll has been closed successfully',
         status: 'success',
-        duration: 3000,
+        duration: 5000,
       });
       onClose();
-    },
-    onError: (error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to close poll',
-        status: 'error',
-        duration: 3000,
-      });
     },
   });
 
@@ -192,28 +198,31 @@ const PollCard = ({ poll }) => {
 
   return (
     <Box
-      bg="gray.800"
+      bg="white"
       p={6}
-      rounded="xl"
-      shadow="xl"
-      w="full"
+      borderRadius="xl"
+      boxShadow="sm"
       borderWidth={1}
-      borderColor="gray.700"
-      _hover={{ borderColor: 'brand.500', transform: 'translateY(-2px)' }}
-      transition="all 0.2s"
+      borderColor="gray.200"
+      _hover={{
+        borderColor: 'brand.500',
+        transform: 'translateY(-2px)',
+        boxShadow: 'md',
+        transition: 'all 0.2s',
+      }}
     >
       <Flex justify="space-between" align="center" mb={4}>
         <VStack align="start" spacing={1}>
-          <Heading size="md" color="whiteAlpha.900">{poll.question}</Heading>
-          <Text fontSize="sm" color="whiteAlpha.700">
-            Created by: <Code bg="gray.700" color="brand.300">{poll.creator}</Code>
+          <Heading size="md">{poll.question}</Heading>
+          <Text fontSize="sm" color="gray.500">
+            Created by: <Code>{poll.creator}</Code>
           </Text>
         </VStack>
         <HStack spacing={2}>
           {isExpired ? (
-            <Badge colorScheme="red" variant="subtle">Expired</Badge>
+            <Badge colorScheme="red">Expired</Badge>
           ) : (
-            <Badge colorScheme="green" variant="subtle">Active</Badge>
+            <Badge colorScheme="green">Active</Badge>
           )}
           {isCreator && (
             <Tooltip label="Close Poll">
@@ -230,10 +239,12 @@ const PollCard = ({ poll }) => {
         </HStack>
       </Flex>
 
-      <Text fontSize="sm" color="whiteAlpha.700" mb={4}>
-        <TimeIcon mr={2} />
-        Ends: {new Date(Number(poll.deadline) * 1000).toLocaleString()}
-      </Text>
+      <HStack color="gray.600" mb={4}>
+        <TimeIcon />
+        <Text fontSize="sm">
+          Ends: {new Date(Number(poll.deadline) * 1000).toLocaleString()}
+        </Text>
+      </HStack>
 
       {!hasVoted && !isExpired ? (
         <VStack align="stretch" spacing={4}>
@@ -250,7 +261,6 @@ const PollCard = ({ poll }) => {
                       setSelectedOptions(selectedOptions.filter(i => i !== index));
                     }
                   }}
-                  colorScheme="brand"
                 >
                   {option.text}
                 </Checkbox>
@@ -263,7 +273,7 @@ const PollCard = ({ poll }) => {
             >
               <Stack spacing={3}>
                 {poll.options.map((option, index) => (
-                  <Radio key={index} value={index.toString()} colorScheme="brand">
+                  <Radio key={index} value={index.toString()}>
                     {option.text}
                   </Radio>
                 ))}
@@ -277,7 +287,6 @@ const PollCard = ({ poll }) => {
             isDisabled={selectedOptions.length === 0}
             leftIcon={<CheckIcon />}
             size="lg"
-            w="full"
           >
             Submit Vote
           </Button>
@@ -287,36 +296,34 @@ const PollCard = ({ poll }) => {
           {poll.options.map((option, index) => (
             <Box key={index}>
               <Flex justify="space-between" mb={1}>
-                <Text color="whiteAlpha.900">{option.text}</Text>
-                <Text color="whiteAlpha.700">
+                <Text>{option.text}</Text>
+                <Text color="gray.600">
                   {Number(option.voteCount)} votes ({totalVotes > 0 ? ((Number(option.voteCount) / totalVotes) * 100).toFixed(1) : 0}%)
                 </Text>
               </Flex>
-              <Box
-                w="full"
-                h="8px"
-                bg="gray.700"
+              <Progress
+                value={totalVotes > 0 ? (Number(option.voteCount) / totalVotes) * 100 : 0}
+                size="sm"
+                colorScheme="brand"
                 borderRadius="full"
-                overflow="hidden"
-              >
-                <Box
-                  w={`${totalVotes > 0 ? (Number(option.voteCount) / totalVotes) * 100 : 0}%`}
-                  h="full"
-                  bg="brand.500"
-                  transition="width 0.3s ease"
-                />
-              </Box>
+              />
             </Box>
           ))}
+          {hasVoted && (
+            <Badge alignSelf="start" colorScheme="brand" variant="subtle">
+              <CheckIcon mr={2} />
+              You have voted
+            </Badge>
+          )}
         </VStack>
       )}
 
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />
-        <ModalContent bg="gray.800">
-          <ModalHeader color="whiteAlpha.900">Close Poll</ModalHeader>
+        <ModalContent>
+          <ModalHeader>Close Poll</ModalHeader>
           <ModalBody>
-            <Text color="whiteAlpha.800">
+            <Text>
               Are you sure you want to close this poll? This action cannot be undone.
             </Text>
           </ModalBody>
