@@ -46,61 +46,61 @@ function PollList() {
   const [loading, setLoading] = useState(true);
   const containerWidth = useBreakpointValue({ base: "95%", md: "90%", lg: "80%" });
 
-  const { data: pollCount } = useContractRead({
+  const { data: pollCount, refetch: refetchPollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
   });
 
-  useEffect(() => {
-    const fetchPolls = async () => {
-      if (!pollCount || !address) return;
+  const fetchPolls = async () => {
+    if (!pollCount || !address) return;
+    
+    try {
+      setLoading(true);
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const contract = new ethers.Contract(POLLS_CONTRACT_ADDRESS, DePollsABI, provider);
       
-      try {
-        setLoading(true);
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
-        const contract = new ethers.Contract(POLLS_CONTRACT_ADDRESS, DePollsABI, provider);
-        
-        const fetchedPolls = [];
-        for (let i = 0; i < Number(pollCount); i++) {
-          try {
-            const poll = await contract.getPoll(i);
-            if (poll.isActive) {
-              fetchedPolls.push({
-                id: poll.id.toNumber(),
-                creator: poll.creator,
-                question: poll.question,
-                options: poll.options.map(opt => ({
-                  text: opt.text,
-                  voteCount: opt.voteCount.toNumber()
-                })),
-                deadline: poll.deadline.toNumber(),
-                isWeighted: poll.isWeighted,
-                isMultipleChoice: poll.isMultipleChoice,
-                isActive: poll.isActive
-              });
-            }
-          } catch (error) {
-            console.error(`Error fetching poll ${i}:`, error);
+      const fetchedPolls = [];
+      for (let i = 0; i < Number(pollCount); i++) {
+        try {
+          const poll = await contract.getPoll(i);
+          if (poll.isActive) {
+            fetchedPolls.push({
+              id: poll.id.toNumber(),
+              creator: poll.creator,
+              question: poll.question,
+              options: poll.options.map(opt => ({
+                text: opt.text,
+                voteCount: opt.voteCount.toNumber()
+              })),
+              deadline: poll.deadline.toNumber(),
+              isWeighted: poll.isWeighted,
+              isMultipleChoice: poll.isMultipleChoice,
+              isActive: poll.isActive
+            });
           }
+        } catch (error) {
+          console.error(`Error fetching poll ${i}:`, error);
         }
-        setPolls(fetchedPolls);
-      } catch (error) {
-        console.error('Error fetching polls:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load polls. Please try again.',
-          status: 'error',
-          duration: 5000,
-        });
-      } finally {
-        setLoading(false);
       }
-    };
+      setPolls(fetchedPolls);
+    } catch (error) {
+      console.error('Error fetching polls:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load polls. Please try again.',
+        status: 'error',
+        duration: 5000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchPolls();
-  }, [address, pollCount, toast]);
+  }, [address, pollCount]);
 
   if (!address) {
     return (
@@ -146,7 +146,7 @@ function PollList() {
         <HStack justify="space-between" wrap="wrap" spacing={4}>
           <Heading size="lg">Active Polls</Heading>
           <Badge colorScheme="brand" p={2} borderRadius="lg" fontSize="md">
-            Total Polls: {pollCount?.toString() || '0'}
+            Active Polls: {activePolls.length}
           </Badge>
         </HStack>
 
@@ -168,7 +168,12 @@ function PollList() {
         ) : (
           <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
             {activePolls.map((poll) => (
-              <PollCard key={poll.id} poll={poll} />
+              <PollCard 
+                key={poll.id} 
+                poll={poll} 
+                onPollUpdate={fetchPolls}
+                refetchPollCount={refetchPollCount}
+              />
             ))}
           </SimpleGrid>
         )}
@@ -177,7 +182,7 @@ function PollList() {
   );
 }
 
-const PollCard = ({ poll }) => {
+const PollCard = ({ poll, onPollUpdate, refetchPollCount }) => {
   const { address } = useAccount();
   const toast = useToast();
   const [selectedOptions, setSelectedOptions] = useState([]);
@@ -205,12 +210,33 @@ const PollCard = ({ poll }) => {
 
   const { write: vote, isLoading: isVoting } = useContractWrite({
     ...voteConfig,
-    onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: 'Your vote has been recorded!',
-        status: 'success',
-        duration: 5000,
+    onSuccess: (data) => {
+      const toastId = toast({
+        title: 'Submitting Vote...',
+        description: 'Please wait while your transaction is being processed.',
+        status: 'info',
+        duration: null,
+        isClosable: false,
+      });
+
+      data.wait().then(() => {
+        toast.close(toastId);
+        toast({
+          title: 'Success!',
+          description: 'Your vote has been recorded successfully.',
+          status: 'success',
+          duration: 5000,
+        });
+        setSelectedOptions([]);
+        onPollUpdate();
+      }).catch((error) => {
+        toast.close(toastId);
+        toast({
+          title: 'Error',
+          description: 'Failed to submit vote. Please try again.',
+          status: 'error',
+          duration: 5000,
+        });
       });
     },
     onError: (error) => {
@@ -233,14 +259,35 @@ const PollCard = ({ poll }) => {
 
   const { write: closePoll, isLoading: isClosing } = useContractWrite({
     ...closeConfig,
-    onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: 'Poll has been closed successfully',
-        status: 'success',
-        duration: 5000,
+    onSuccess: (data) => {
+      const toastId = toast({
+        title: 'Closing Poll...',
+        description: 'Please wait while your transaction is being processed.',
+        status: 'info',
+        duration: null,
+        isClosable: false,
       });
-      onClose();
+
+      data.wait().then(() => {
+        toast.close(toastId);
+        toast({
+          title: 'Success!',
+          description: 'Poll has been closed successfully.',
+          status: 'success',
+          duration: 5000,
+        });
+        onClose();
+        onPollUpdate();
+        refetchPollCount();
+      }).catch((error) => {
+        toast.close(toastId);
+        toast({
+          title: 'Error',
+          description: 'Failed to close poll. Please try again.',
+          status: 'error',
+          duration: 5000,
+        });
+      });
     },
   });
 
@@ -264,115 +311,115 @@ const PollCard = ({ poll }) => {
         transition: 'all 0.2s',
       }}
     >
-      <Flex justify="space-between" align="flex-start" mb={4}>
-        <VStack align="start" spacing={1} flex={1}>
+      <VStack align="stretch" spacing={4}>
+        <Flex justify="space-between" align="flex-start">
           <Heading size="md" noOfLines={2}>{poll.question}</Heading>
-          <Text fontSize="sm" color="gray.500" noOfLines={1}>
-            Created by: <Code fontSize="xs">{poll.creator}</Code>
-          </Text>
-        </VStack>
-        <HStack spacing={2} ml={2}>
           {isExpired ? (
             <Badge colorScheme="red">Expired</Badge>
           ) : (
             <Badge colorScheme="green">Active</Badge>
           )}
-          {isCreator && (
-            <Tooltip label="Close Poll">
-              <IconButton
-                icon={<DeleteIcon />}
-                variant="ghost"
-                colorScheme="red"
-                size="sm"
-                onClick={onOpen}
-                isDisabled={!poll.isActive}
-              />
-            </Tooltip>
-          )}
-        </HStack>
-      </Flex>
+        </Flex>
 
-      <HStack color="gray.600" mb={4} fontSize="sm">
-        <TimeIcon />
-        <Text noOfLines={1}>
-          Ends: {new Date(Number(poll.deadline) * 1000).toLocaleString()}
+        <Text fontSize="sm" color="gray.500" noOfLines={1}>
+          Created by: <Code fontSize="xs">{poll.creator}</Code>
         </Text>
-      </HStack>
 
-      <Box flex={1}>
-        {!hasVoted && !isExpired ? (
-          <VStack align="stretch" spacing={4}>
-            {poll.isMultipleChoice ? (
-              <Stack spacing={3}>
-                {poll.options.map((option, index) => (
-                  <Checkbox
-                    key={index}
-                    isChecked={selectedOptions.includes(index)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedOptions([...selectedOptions, index]);
-                      } else {
-                        setSelectedOptions(selectedOptions.filter(i => i !== index));
-                      }
-                    }}
-                  >
-                    {option.text}
-                  </Checkbox>
-                ))}
-              </Stack>
-            ) : (
-              <RadioGroup
-                onChange={(value) => setSelectedOptions([parseInt(value)])}
-                value={selectedOptions[0]?.toString()}
-              >
+        <HStack color="gray.600" fontSize="sm">
+          <TimeIcon />
+          <Text noOfLines={1}>
+            Ends: {new Date(Number(poll.deadline) * 1000).toLocaleString()}
+          </Text>
+        </HStack>
+
+        {isCreator && (
+          <Button
+            leftIcon={<DeleteIcon />}
+            variant="ghost"
+            colorScheme="red"
+            size="sm"
+            onClick={onOpen}
+            isDisabled={!poll.isActive}
+          >
+            Close Poll
+          </Button>
+        )}
+
+        <Box flex={1}>
+          {!hasVoted && !isExpired ? (
+            <VStack align="stretch" spacing={4}>
+              {poll.isMultipleChoice ? (
                 <Stack spacing={3}>
                   {poll.options.map((option, index) => (
-                    <Radio key={index} value={index.toString()}>
+                    <Checkbox
+                      key={index}
+                      isChecked={selectedOptions.includes(index)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedOptions([...selectedOptions, index]);
+                        } else {
+                          setSelectedOptions(selectedOptions.filter(i => i !== index));
+                        }
+                      }}
+                    >
                       {option.text}
-                    </Radio>
+                    </Checkbox>
                   ))}
                 </Stack>
-              </RadioGroup>
-            )}
+              ) : (
+                <RadioGroup
+                  onChange={(value) => setSelectedOptions([parseInt(value)])}
+                  value={selectedOptions[0]?.toString()}
+                >
+                  <Stack spacing={3}>
+                    {poll.options.map((option, index) => (
+                      <Radio key={index} value={index.toString()}>
+                        {option.text}
+                      </Radio>
+                    ))}
+                  </Stack>
+                </RadioGroup>
+              )}
 
-            <Button
-              onClick={() => vote?.()}
-              isLoading={isVoting}
-              isDisabled={selectedOptions.length === 0}
-              leftIcon={<CheckIcon />}
-              size="md"
-              mt="auto"
-            >
-              Submit Vote
-            </Button>
-          </VStack>
-        ) : (
-          <VStack align="stretch" spacing={4}>
-            {poll.options.map((option, index) => (
-              <Box key={index}>
-                <Flex justify="space-between" mb={1}>
-                  <Text noOfLines={1}>{option.text}</Text>
-                  <Text color="gray.600" ml={2}>
-                    {Number(option.voteCount)} votes ({totalVotes > 0 ? ((Number(option.voteCount) / totalVotes) * 100).toFixed(1) : 0}%)
-                  </Text>
-                </Flex>
-                <Progress
-                  value={totalVotes > 0 ? (Number(option.voteCount) / totalVotes) * 100 : 0}
-                  size="sm"
-                  colorScheme="brand"
-                  borderRadius="full"
-                />
-              </Box>
-            ))}
-            {hasVoted && (
-              <Badge alignSelf="start" colorScheme="brand" variant="subtle">
-                <CheckIcon mr={2} />
-                You have voted
-              </Badge>
-            )}
-          </VStack>
-        )}
-      </Box>
+              <Button
+                onClick={() => vote?.()}
+                isLoading={isVoting}
+                isDisabled={selectedOptions.length === 0}
+                leftIcon={<CheckIcon />}
+                size="md"
+                mt="auto"
+              >
+                Submit Vote
+              </Button>
+            </VStack>
+          ) : (
+            <VStack align="stretch" spacing={4}>
+              {poll.options.map((option, index) => (
+                <Box key={index}>
+                  <Flex justify="space-between" mb={1}>
+                    <Text noOfLines={1}>{option.text}</Text>
+                    <Text color="gray.600" ml={2}>
+                      {Number(option.voteCount)} votes ({totalVotes > 0 ? ((Number(option.voteCount) / totalVotes) * 100).toFixed(1) : 0}%)
+                    </Text>
+                  </Flex>
+                  <Progress
+                    value={totalVotes > 0 ? (Number(option.voteCount) / totalVotes) * 100 : 0}
+                    size="sm"
+                    colorScheme="brand"
+                    borderRadius="full"
+                  />
+                </Box>
+              ))}
+              {hasVoted && (
+                <Badge alignSelf="start" colorScheme="brand" variant="subtle">
+                  <CheckIcon mr={2} />
+                  You have voted
+                </Badge>
+              )}
+            </VStack>
+          )}
+        </Box>
+      </VStack>
 
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />

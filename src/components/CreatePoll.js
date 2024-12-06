@@ -6,54 +6,104 @@ import {
   FormLabel,
   Input,
   VStack,
-  Heading,
-  Switch,
-  IconButton,
   HStack,
+  IconButton,
   useToast,
+  Switch,
+  Text,
+  Card,
+  CardHeader,
+  CardBody,
+  Heading,
+  Collapse,
+  useDisclosure,
+  Tooltip,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon } from '@chakra-ui/icons';
-import { useAccount, useContractWrite, usePrepareContractWrite } from 'wagmi';
+import { AddIcon, DeleteIcon, ChevronDownIcon, ChevronUpIcon } from '@chakra-ui/icons';
+import { useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { DePollsABI } from '../contracts/abis';
 
+const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
+
 const CreatePoll = () => {
-  const { address } = useAccount();
-  const toast = useToast();
+  const { isOpen, onToggle } = useDisclosure();
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
-  const [deadline, setDeadline] = useState('');
-  const [isWeighted, setIsWeighted] = useState(false);
   const [isMultipleChoice, setIsMultipleChoice] = useState(false);
+  const [isWeighted, setIsWeighted] = useState(false);
+  const toast = useToast();
+
+  const deadline = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60; // 7 days from now
 
   const { config } = usePrepareContractWrite({
-    address: process.env.REACT_APP_POLLS_CONTRACT_ADDRESS,
+    address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'createPoll',
-    args: [
-      question,
-      options.filter(opt => opt.trim() !== ''),
-      Math.floor(new Date(deadline).getTime() / 1000),
-      isWeighted,
-      isMultipleChoice,
-    ],
-    enabled: Boolean(question && options.length >= 2 && deadline),
+    args: [question, options.filter(opt => opt.trim()), deadline, isWeighted, isMultipleChoice],
+    enabled: question.trim() !== '' && options.filter(opt => opt.trim()).length >= 2,
   });
 
-  const { write: createPoll, isLoading } = useContractWrite(config);
+  const { write: createPoll, isLoading } = useContractWrite({
+    ...config,
+    onSuccess: (data) => {
+      const toastId = toast({
+        title: 'Creating Poll...',
+        description: 'Please wait while your transaction is being processed.',
+        status: 'info',
+        duration: null,
+        isClosable: false,
+      });
 
-  const handleAddOption = () => {
-    setOptions([...options, '']);
+      data.wait().then(() => {
+        toast.close(toastId);
+        toast({
+          title: 'Poll Created!',
+          description: 'Your poll has been created successfully.',
+          status: 'success',
+          duration: 5000,
+        });
+        resetForm();
+      }).catch((error) => {
+        toast.close(toastId);
+        toast({
+          title: 'Error',
+          description: 'Failed to create poll. Please try again.',
+          status: 'error',
+          duration: 5000,
+        });
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create poll',
+        status: 'error',
+        duration: 5000,
+      });
+    },
+  });
+
+  const resetForm = () => {
+    setQuestion('');
+    setOptions(['', '']);
+    setIsMultipleChoice(false);
+    setIsWeighted(false);
+    onToggle();
   };
 
-  const handleRemoveOption = (index) => {
-    if (options.length > 2) {
-      const newOptions = [...options];
-      newOptions.splice(index, 1);
-      setOptions(newOptions);
+  const addOption = () => {
+    if (options.length < 5) {
+      setOptions([...options, '']);
     }
   };
 
-  const handleOptionChange = (index, value) => {
+  const removeOption = (index) => {
+    if (options.length > 2) {
+      setOptions(options.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateOption = (index, value) => {
     const newOptions = [...options];
     newOptions[index] = value;
     setOptions(newOptions);
@@ -61,114 +111,106 @@ const CreatePoll = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!address) {
-      toast({
-        title: 'Error',
-        description: 'Please connect your wallet first',
-        status: 'error',
-        duration: 3000,
-      });
-      return;
-    }
-
-    try {
-      await createPoll?.();
-      toast({
-        title: 'Success',
-        description: 'Poll created successfully',
-        status: 'success',
-        duration: 3000,
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        status: 'error',
-        duration: 3000,
-      });
-    }
+    if (!createPoll) return;
+    createPoll();
   };
 
   return (
-    <Box bg="white" p={6} rounded="lg" shadow="sm">
-      <Heading size="md" mb={6}>Create New Poll</Heading>
-      <form onSubmit={handleSubmit}>
-        <VStack spacing={4} align="stretch">
-          <FormControl isRequired>
-            <FormLabel>Question</FormLabel>
-            <Input
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="What would you like to ask?"
-            />
-          </FormControl>
-
-          {options.map((option, index) => (
-            <HStack key={index}>
+    <Card variant="outline" width="100%" mb={8}>
+      <CardHeader p={4}>
+        <HStack justify="space-between" onClick={onToggle} cursor="pointer" width="100%">
+          <Heading size="md">Create New Poll</Heading>
+          {isOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
+        </HStack>
+      </CardHeader>
+      <Collapse in={isOpen}>
+        <CardBody pt={0}>
+          <form onSubmit={handleSubmit}>
+            <VStack spacing={4} align="stretch">
               <FormControl isRequired>
-                <FormLabel>Option {index + 1}</FormLabel>
+                <FormLabel>Question</FormLabel>
                 <Input
-                  value={option}
-                  onChange={(e) => handleOptionChange(index, e.target.value)}
-                  placeholder={`Option ${index + 1}`}
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="Enter your question"
                 />
               </FormControl>
-              {index >= 2 && (
-                <IconButton
-                  icon={<DeleteIcon />}
-                  onClick={() => handleRemoveOption(index)}
-                  aria-label="Remove option"
-                  mt={8}
-                />
-              )}
-            </HStack>
-          ))}
 
-          <Button
-            leftIcon={<AddIcon />}
-            onClick={handleAddOption}
-            size="sm"
-            variant="ghost"
-          >
-            Add Option
-          </Button>
+              <FormControl isRequired>
+                <FormLabel>Options (2-5)</FormLabel>
+                <VStack spacing={2} align="stretch">
+                  {options.map((option, index) => (
+                    <HStack key={index}>
+                      <Input
+                        value={option}
+                        onChange={(e) => updateOption(index, e.target.value)}
+                        placeholder={`Option ${index + 1}`}
+                      />
+                      {options.length > 2 && (
+                        <Tooltip label="Remove Option">
+                          <IconButton
+                            icon={<DeleteIcon />}
+                            onClick={() => removeOption(index)}
+                            variant="ghost"
+                            colorScheme="red"
+                          />
+                        </Tooltip>
+                      )}
+                    </HStack>
+                  ))}
+                  {options.length < 5 && (
+                    <Button
+                      leftIcon={<AddIcon />}
+                      onClick={addOption}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      Add Option
+                    </Button>
+                  )}
+                </VStack>
+              </FormControl>
 
-          <FormControl isRequired>
-            <FormLabel>Deadline</FormLabel>
-            <Input
-              type="datetime-local"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-            />
-          </FormControl>
+              <HStack justify="space-between" spacing={8}>
+                <FormControl display="flex" alignItems="center">
+                  <Switch
+                    id="multiple-choice"
+                    isChecked={isMultipleChoice}
+                    onChange={(e) => setIsMultipleChoice(e.target.checked)}
+                    mr={2}
+                  />
+                  <FormLabel htmlFor="multiple-choice" mb={0}>
+                    Multiple Choice
+                  </FormLabel>
+                </FormControl>
 
-          <FormControl display="flex" alignItems="center">
-            <FormLabel mb="0">Enable Token-Weighted Voting</FormLabel>
-            <Switch
-              isChecked={isWeighted}
-              onChange={(e) => setIsWeighted(e.target.checked)}
-            />
-          </FormControl>
+                <FormControl display="flex" alignItems="center">
+                  <Switch
+                    id="weighted-voting"
+                    isChecked={isWeighted}
+                    onChange={(e) => setIsWeighted(e.target.checked)}
+                    mr={2}
+                  />
+                  <FormLabel htmlFor="weighted-voting" mb={0}>
+                    Weighted Voting
+                  </FormLabel>
+                </FormControl>
+              </HStack>
 
-          <FormControl display="flex" alignItems="center">
-            <FormLabel mb="0">Allow Multiple Choice</FormLabel>
-            <Switch
-              isChecked={isMultipleChoice}
-              onChange={(e) => setIsMultipleChoice(e.target.checked)}
-            />
-          </FormControl>
-
-          <Button
-            type="submit"
-            colorScheme="blue"
-            isLoading={isLoading}
-            isDisabled={!createPoll || !address}
-          >
-            Create Poll
-          </Button>
-        </VStack>
-      </form>
-    </Box>
+              <Button
+                type="submit"
+                colorScheme="brand"
+                isLoading={isLoading}
+                isDisabled={!createPoll || question.trim() === '' || options.filter(opt => opt.trim()).length < 2}
+                loadingText="Creating Poll..."
+              >
+                Create Poll
+              </Button>
+            </VStack>
+          </form>
+        </CardBody>
+      </Collapse>
+    </Card>
   );
 };
 
