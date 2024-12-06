@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChakraProvider, Box, Container } from '@chakra-ui/react';
+import { ChakraProvider, Box, Container, VStack, useColorMode } from '@chakra-ui/react';
 import { EthereumClient, w3mConnectors, w3mProvider } from '@web3modal/ethereum';
 import { Web3Modal } from '@web3modal/react';
 import { configureChains, createConfig, WagmiConfig } from 'wagmi';
@@ -8,12 +8,11 @@ import { publicProvider } from 'wagmi/providers/public';
 import Navbar from './components/Navbar';
 import PollList from './components/PollList';
 import CreatePoll from './components/CreatePoll';
+import theme from './theme';
 
 // Hardcode the project ID for now
 const projectId = "ad702a29a086d332c88ecdd4c8dcd51c";
 const chains = [sepolia];
-
-console.log("WalletConnect Project ID:", projectId); // Debug log
 
 const { publicClient, webSocketPublicClient } = configureChains(
   chains,
@@ -37,17 +36,19 @@ const wagmiConfig = createConfig({
 const ethereumClient = new EthereumClient(wagmiConfig, chains);
 
 function App() {
+  const { colorMode } = useColorMode();
+
   return (
     <>
       <WagmiConfig config={wagmiConfig}>
-        <ChakraProvider>
-          <Box minH="100vh" bg="gray.50">
+        <ChakraProvider theme={theme}>
+          <Box minH="100vh" bg={colorMode === 'dark' ? 'gray.900' : 'gray.50'}>
             <Navbar />
             <Container maxW="container.xl" py={8}>
-              <CreatePoll />
-              <Box mt={8}>
+              <VStack spacing={8} w="full">
+                <CreatePoll />
                 <PollList />
-              </Box>
+              </VStack>
             </Container>
           </Box>
         </ChakraProvider>
@@ -56,11 +57,13 @@ function App() {
         projectId={projectId}
         ethereumClient={ethereumClient}
         defaultChain={sepolia}
-        themeMode="light"
-        explorerRecommendedWalletIds={[
-          'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
-          '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0'  // Trust Wallet
-        ]}
+        themeMode="dark"
+        themeVariables={{
+          '--w3m-font-family': 'inherit',
+          '--w3m-accent-color': '#3b00e6',
+          '--w3m-background-color': '#1a202c',
+          '--w3m-container-border-radius': '16px',
+        }}
       />
     </>
   );
