@@ -20,7 +20,7 @@ import {
   Tooltip,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, ChevronDownIcon, ChevronUpIcon } from '@chakra-ui/icons';
-import { useContractWrite, usePrepareContractWrite } from 'wagmi';
+import { useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
 import { DePollsABI } from '../contracts/abis';
 
 const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
@@ -47,8 +47,36 @@ const CreatePoll = ({ onPollCreated }) => {
     enabled: question.trim() !== '' && validOptions.length >= 2,
   });
 
-  const { write: createPoll, isLoading, data: txData } = useContractWrite({
+  const { write: createPoll, isLoading: isCreating, data } = useContractWrite({
     ...config,
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create poll',
+        status: 'error',
+        duration: 5000,
+      });
+      console.error('Contract error:', error);
+    },
+  });
+
+  const { isLoading: isWaiting } = useWaitForTransaction({
+    hash: data?.hash,
+    onSuccess: () => {
+      toast({
+        title: 'Poll Created!',
+        description: 'Your poll has been created successfully.',
+        status: 'success',
+        duration: 5000,
+      });
+      resetForm();
+      if (onPollCreated) {
+        onPollCreated();
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
     onSuccess: async (data) => {
       const toastId = toast({
         title: 'Creating Poll...',

@@ -33,7 +33,7 @@ import {
   useBreakpointValue,
 } from '@chakra-ui/react';
 import { DeleteIcon, TimeIcon, CheckIcon } from '@chakra-ui/icons';
-import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
+import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI } from '../contracts/abis';
 import CreatePoll from './CreatePoll';
@@ -207,7 +207,7 @@ const PollCard = ({ poll, onPollUpdate }) => {
     enabled: !!address,
   });
 
-  const { config: voteConfig } = usePrepareContractWrite({
+  const { config: voteConfig, error: prepareVoteError } = usePrepareContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'vote',
@@ -215,52 +215,8 @@ const PollCard = ({ poll, onPollUpdate }) => {
     enabled: selectedOptions.length > 0 && !hasVoted && !!address,
   });
 
-  const { write: vote, isLoading: isVoting } = useContractWrite({
+  const { write: vote, isLoading: isVoting, data: voteData } = useContractWrite({
     ...voteConfig,
-    onSuccess: (data) => {
-      const toastId = toast({
-        title: 'Submitting Vote...',
-        description: 'Please wait while your transaction is being processed.',
-        status: 'info',
-        duration: null,
-        isClosable: false,
-      });
-
-      const waitForTransaction = async () => {
-        try {
-          const receipt = await data.wait();
-          toast.close(toastId);
-          
-          if (receipt.status === 1) {
-            toast({
-              title: 'Success!',
-              description: 'Your vote has been recorded successfully.',
-              status: 'success',
-              duration: 5000,
-            });
-            setSelectedOptions([]);
-            onPollUpdate();
-          } else {
-            toast({
-              title: 'Error',
-              description: 'Transaction failed. Please try again.',
-              status: 'error',
-              duration: 5000,
-            });
-          }
-        } catch (error) {
-          toast.close(toastId);
-          toast({
-            title: 'Error',
-            description: 'Failed to submit vote. Please try again.',
-            status: 'error',
-            duration: 5000,
-          });
-        }
-      };
-
-      waitForTransaction();
-    },
     onError: (error) => {
       toast({
         title: 'Error',
@@ -268,6 +224,30 @@ const PollCard = ({ poll, onPollUpdate }) => {
         status: 'error',
         duration: 5000,
       });
+      console.error('Vote error:', error);
+    },
+  });
+
+  const { isLoading: isWaitingVote } = useWaitForTransaction({
+    hash: voteData?.hash,
+    onSuccess: () => {
+      toast({
+        title: 'Vote Submitted!',
+        description: 'Your vote has been recorded successfully.',
+        status: 'success',
+        duration: 5000,
+      });
+      setSelectedOptions([]);
+      onPollUpdate();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: 'Failed to submit vote. Please try again.',
+        status: 'error',
+        duration: 5000,
+      });
+      console.error('Vote transaction error:', error);
     },
   });
 
@@ -279,52 +259,8 @@ const PollCard = ({ poll, onPollUpdate }) => {
     enabled: isCreator && poll.isActive,
   });
 
-  const { write: closePoll, isLoading: isClosing } = useContractWrite({
+  const { write: closePoll, isLoading: isClosing, data: closeData } = useContractWrite({
     ...closeConfig,
-    onSuccess: (data) => {
-      const toastId = toast({
-        title: 'Closing Poll...',
-        description: 'Please wait while your transaction is being processed.',
-        status: 'info',
-        duration: null,
-        isClosable: false,
-      });
-
-      const waitForTransaction = async () => {
-        try {
-          const receipt = await data.wait();
-          toast.close(toastId);
-          
-          if (receipt.status === 1) {
-            toast({
-              title: 'Success!',
-              description: 'Poll has been closed successfully.',
-              status: 'success',
-              duration: 5000,
-            });
-            onClose();
-            onPollUpdate();
-          } else {
-            toast({
-              title: 'Error',
-              description: 'Transaction failed. Please try again.',
-              status: 'error',
-              duration: 5000,
-            });
-          }
-        } catch (error) {
-          toast.close(toastId);
-          toast({
-            title: 'Error',
-            description: 'Failed to close poll. Please try again.',
-            status: 'error',
-            duration: 5000,
-          });
-        }
-      };
-
-      waitForTransaction();
-    },
     onError: (error) => {
       toast({
         title: 'Error',
@@ -332,10 +268,61 @@ const PollCard = ({ poll, onPollUpdate }) => {
         status: 'error',
         duration: 5000,
       });
+      console.error('Close poll error:', error);
     },
   });
 
+  const { isLoading: isWaitingClose } = useWaitForTransaction({
+    hash: closeData?.hash,
+    onSuccess: () => {
+      toast({
+        title: 'Poll Closed!',
+        description: 'The poll has been closed successfully.',
+        status: 'success',
+        duration: 5000,
+      });
+      onClose();
+      onPollUpdate();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: 'Failed to close poll. Please try again.',
+        status: 'error',
+        duration: 5000,
+      });
+      console.error('Close poll transaction error:', error);
+    },
+  });
+
+  const handleVote = () => {
+    if (!vote) {
+      if (prepareVoteError) {
+        toast({
+          title: 'Error',
+          description: prepareVoteError.message || 'Failed to prepare vote',
+          status: 'error',
+          duration: 5000,
+        });
+        console.error('Prepare vote error:', prepareVoteError);
+      }
+      return;
+    }
+
+    toast({
+      title: 'Submitting Vote...',
+      description: 'Please wait while your transaction is being processed.',
+      status: 'info',
+      duration: null,
+      isClosable: false,
+      id: 'voting',
+    });
+
+    vote();
+  };
+
   const totalVotes = poll.options.reduce((sum, opt) => sum + Number(opt.voteCount), 0);
+  const isLoading = isVoting || isWaitingVote || isClosing || isWaitingClose;
 
   return (
     <Box
@@ -426,15 +413,22 @@ const PollCard = ({ poll, onPollUpdate }) => {
               )}
 
               <Button
-                onClick={() => vote?.()}
-                isLoading={isVoting}
-                isDisabled={selectedOptions.length === 0}
+                onClick={handleVote}
+                isLoading={isLoading}
+                isDisabled={selectedOptions.length === 0 || !vote}
                 leftIcon={<CheckIcon />}
                 size="md"
                 mt="auto"
+                loadingText={isWaitingVote ? 'Submitting Vote...' : 'Preparing...'}
               >
                 Submit Vote
               </Button>
+
+              {prepareVoteError && (
+                <Text color="red.500" fontSize="sm">
+                  {prepareVoteError.message}
+                </Text>
+              )}
             </VStack>
           ) : (
             <VStack align="stretch" spacing={4}>
