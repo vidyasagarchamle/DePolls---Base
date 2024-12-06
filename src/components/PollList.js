@@ -172,14 +172,45 @@ const PollList = () => {
   });
 
   // Get individual poll data
-  const pollIds = pollCount ? [...Array(Number(pollCount)).keys()] : [];
-  const pollReads = pollIds.map(id => useContractRead({
+  const { data: poll0 } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'getPoll',
-    args: [id],
-    watch: true,
-  }));
+    args: [0],
+    enabled: pollCount && Number(pollCount) > 0,
+  });
+
+  const { data: poll1 } = useContractRead({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'getPoll',
+    args: [1],
+    enabled: pollCount && Number(pollCount) > 1,
+  });
+
+  const { data: poll2 } = useContractRead({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'getPoll',
+    args: [2],
+    enabled: pollCount && Number(pollCount) > 2,
+  });
+
+  const { data: poll3 } = useContractRead({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'getPoll',
+    args: [3],
+    enabled: pollCount && Number(pollCount) > 3,
+  });
+
+  const { data: poll4 } = useContractRead({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'getPoll',
+    args: [4],
+    enabled: pollCount && Number(pollCount) > 4,
+  });
 
   useEffect(() => {
     const updatePolls = () => {
@@ -188,24 +219,31 @@ const PollList = () => {
         setError(null);
 
         console.log('Poll count:', pollCount ? pollCount.toString() : '0');
-        
-        const validPolls = pollReads
-          .map(read => read.data)
-          .filter(poll => poll && poll.isActive)
+        console.log('Poll 0:', poll0);
+        console.log('Poll 1:', poll1);
+        console.log('Poll 2:', poll2);
+        console.log('Poll 3:', poll3);
+        console.log('Poll 4:', poll4);
+
+        const allPolls = [poll0, poll1, poll2, poll3, poll4]
+          .filter(poll => poll) // Remove undefined polls
           .map(poll => ({
-            ...poll,
             id: Number(poll.id),
+            creator: poll.creator,
+            question: poll.question,
             deadline: Number(poll.deadline),
+            isWeighted: poll.isWeighted,
+            isMultipleChoice: poll.isMultipleChoice,
+            isActive: poll.isActive,
             options: poll.options.map(opt => ({
-              ...opt,
+              text: opt.text,
               voteCount: Number(opt.voteCount)
             }))
-          }));
+          }))
+          .filter(poll => poll.isActive);
 
-        console.log('Valid polls:', validPolls.length);
-        console.log('Poll data:', validPolls);
-        
-        setPolls(validPolls);
+        console.log('Processed polls:', allPolls);
+        setPolls(allPolls);
       } catch (err) {
         console.error('Error updating polls:', err);
         setError(err.message);
@@ -214,10 +252,10 @@ const PollList = () => {
       }
     };
 
-    if (address) {
+    if (address && pollCount) {
       updatePolls();
     }
-  }, [address, pollCount, ...pollReads.map(read => read.data)]);
+  }, [address, pollCount, poll0, poll1, poll2, poll3, poll4]);
 
   if (!address) {
     return (
