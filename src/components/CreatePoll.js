@@ -22,7 +22,7 @@ import { AddIcon, DeleteIcon, ChevronDownIcon, ChevronUpIcon } from '@chakra-ui/
 import { useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
 import { DePollsABI } from '../contracts/abis';
 
-const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
+const POLLS_CONTRACT_ADDRESS = "0x148929b6F90952d2a5dAa234D58B0443167024E4";
 
 const CreatePoll = ({ onPollCreated }) => {
   const { isOpen, onToggle } = useDisclosure();

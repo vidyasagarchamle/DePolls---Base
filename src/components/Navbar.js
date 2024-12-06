@@ -2,12 +2,13 @@ import React from 'react';
 import { Box, Flex, Button, Heading, Text, useColorModeValue } from '@chakra-ui/react';
 import { useAccount, useBalance } from 'wagmi';
 import { Web3Button } from '@web3modal/react';
+import { TOKEN_CONTRACT_ADDRESS } from '../contracts/abis';
 
 const Navbar = () => {
   const { address } = useAccount();
   const { data: balance } = useBalance({
     address,
-    token: process.env.REACT_APP_TOKEN_ADDRESS,
+    token: TOKEN_CONTRACT_ADDRESS,
   });
 
   return (
