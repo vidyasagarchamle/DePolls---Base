@@ -33,7 +33,7 @@ import {
   useBreakpointValue,
 } from '@chakra-ui/react';
 import { DeleteIcon, TimeIcon, CheckIcon } from '@chakra-ui/icons';
-import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
+import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI } from '../contracts/abis';
 import CreatePoll from './CreatePoll';
@@ -47,12 +47,36 @@ function PollList() {
   const [loading, setLoading] = useState(true);
   const containerWidth = useBreakpointValue({ base: "95%", md: "90%", lg: "80%" });
 
-  const { data: pollCount, refetch: refetchPollCount } = useContractRead({
+  const { data: pollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
   });
+
+  const fetchPoll = async (id, provider, contract) => {
+    try {
+      const poll = await contract.getPoll(id);
+      if (poll.isActive) {
+        return {
+          id: poll.id.toNumber(),
+          creator: poll.creator,
+          question: poll.question,
+          options: poll.options.map(opt => ({
+            text: opt.text,
+            voteCount: opt.voteCount.toNumber()
+          })),
+          deadline: poll.deadline.toNumber(),
+          isWeighted: poll.isWeighted,
+          isMultipleChoice: poll.isMultipleChoice,
+          isActive: poll.isActive
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching poll ${id}:`, error);
+    }
+    return null;
+  };
 
   const fetchPolls = async () => {
     if (!pollCount || !address) return;
@@ -62,29 +86,13 @@ function PollList() {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const contract = new ethers.Contract(POLLS_CONTRACT_ADDRESS, DePollsABI, provider);
       
-      const fetchedPolls = [];
-      for (let i = 0; i < Number(pollCount); i++) {
-        try {
-          const poll = await contract.getPoll(i);
-          if (poll.isActive) {
-            fetchedPolls.push({
-              id: poll.id.toNumber(),
-              creator: poll.creator,
-              question: poll.question,
-              options: poll.options.map(opt => ({
-                text: opt.text,
-                voteCount: opt.voteCount.toNumber()
-              })),
-              deadline: poll.deadline.toNumber(),
-              isWeighted: poll.isWeighted,
-              isMultipleChoice: poll.isMultipleChoice,
-              isActive: poll.isActive
-            });
-          }
-        } catch (error) {
-          console.error(`Error fetching poll ${i}:`, error);
-        }
+      const pollPromises = [];
+      for (let i = 0; i < pollCount.toNumber(); i++) {
+        pollPromises.push(fetchPoll(i, provider, contract));
       }
+
+      const fetchedPolls = (await Promise.all(pollPromises)).filter(poll => poll !== null);
+      console.log('Fetched polls:', fetchedPolls);
       setPolls(fetchedPolls);
     } catch (error) {
       console.error('Error fetching polls:', error);
@@ -100,11 +108,12 @@ function PollList() {
   };
 
   useEffect(() => {
-    fetchPolls();
+    if (address && pollCount) {
+      fetchPolls();
+    }
   }, [address, pollCount]);
 
   const handlePollUpdate = () => {
-    refetchPollCount();
     fetchPolls();
   };
 
@@ -146,6 +155,7 @@ function PollList() {
   }
 
   const activePolls = polls.filter(poll => poll.isActive && new Date(Number(poll.deadline) * 1000) > new Date());
+  console.log('Active polls:', activePolls);
 
   return (
     <Container maxW={containerWidth} py={8}>
