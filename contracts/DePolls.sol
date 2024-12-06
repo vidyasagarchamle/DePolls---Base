@@ -90,8 +90,8 @@ contract DePolls is Ownable {
         poll.hasVoted[msg.sender] = true;
         poll.votes[msg.sender] = _optionIndices;
 
-        // Reward the voter
-        rewardToken.rewardUser(msg.sender, REWARD_AMOUNT);
+        // Transfer reward tokens directly from this contract
+        require(rewardToken.transfer(msg.sender, REWARD_AMOUNT), "Reward transfer failed");
 
         emit Voted(_pollId, msg.sender, _optionIndices);
     }
@@ -127,5 +127,10 @@ contract DePolls is Ownable {
         Poll storage poll = polls[_pollId];
         require(msg.sender == poll.creator || msg.sender == owner(), "Not authorized");
         poll.isActive = false;
+    }
+
+    // Function to withdraw any remaining tokens (only owner)
+    function withdrawTokens(uint256 amount) public onlyOwner {
+        require(rewardToken.transfer(owner(), amount), "Withdrawal failed");
     }
 } 

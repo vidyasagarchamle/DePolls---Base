@@ -18,10 +18,16 @@ async function main() {
   const pollsAddress = polls.address;
   console.log("DePolls deployed to:", pollsAddress);
 
-  // Transfer some tokens to the polls contract for rewards
-  const amount = hre.ethers.utils.parseEther("100000");
-  await token.transfer(pollsAddress, amount);
-  console.log("Transferred reward tokens to polls contract");
+  // Transfer tokens to the polls contract for rewards
+  console.log("\nSetting up rewards...");
+  const rewardAmount = hre.ethers.utils.parseEther("100000"); // 100,000 tokens for rewards
+  await token.transfer(pollsAddress, rewardAmount);
+  console.log(`Transferred ${hre.ethers.utils.formatEther(rewardAmount)} DPOLL to polls contract`);
+
+  // Verify balances
+  const pollsBalance = await token.balanceOf(pollsAddress);
+  console.log("\nFinal balances:");
+  console.log(`Polls contract: ${hre.ethers.utils.formatEther(pollsBalance)} DPOLL`);
 
   // Write the addresses to a file
   const fs = require("fs");
@@ -30,7 +36,7 @@ async function main() {
     pollsAddress
   };
   fs.writeFileSync("deployed-addresses.json", JSON.stringify(addresses, null, 2));
-  console.log("Contract addresses saved to deployed-addresses.json");
+  console.log("\nContract addresses saved to deployed-addresses.json");
 }
 
 main()

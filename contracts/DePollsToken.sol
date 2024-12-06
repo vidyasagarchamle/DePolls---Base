@@ -12,9 +12,4 @@ contract DePollsToken is ERC20, Ownable {
     function mint(address to, uint256 amount) public onlyOwner {
         _mint(to, amount);
     }
-
-    function rewardUser(address user, uint256 amount) public {
-        require(balanceOf(address(this)) >= amount, "Insufficient reward balance");
-        _transfer(address(this), user, amount);
-    }
 } 
