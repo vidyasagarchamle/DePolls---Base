@@ -12,6 +12,7 @@ import {
   useToast,
   Alert,
   AlertIcon,
+  Code,
 } from '@chakra-ui/react';
 import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { DePollsABI } from '../contracts/abis';
@@ -35,7 +36,6 @@ ChartJS.register(
   Legend
 );
 
-// Hardcode the contract address for now
 const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
 
 const PollCard = ({ poll }) => {
@@ -48,6 +48,7 @@ const PollCard = ({ poll }) => {
     abi: DePollsABI,
     functionName: 'hasVoted',
     args: [poll.id, address],
+    watch: true,
   });
 
   const { config } = usePrepareContractWrite({
@@ -79,14 +80,17 @@ const PollCard = ({ poll }) => {
     }
   };
 
-  const totalVotes = poll.options.reduce((sum, opt) => sum + parseInt(opt.voteCount), 0);
-  const isExpired = new Date(poll.deadline * 1000) < new Date();
+  const totalVotes = poll.options.reduce((sum, opt) => sum + Number(opt.voteCount), 0);
+  const isExpired = new Date(Number(poll.deadline) * 1000) < new Date();
 
   return (
     <Box bg="white" p={6} rounded="lg" shadow="sm" w="full">
       <Heading size="md" mb={4}>{poll.question}</Heading>
+      <Text color="gray.600" mb={2}>
+        Created by: <Code>{poll.creator}</Code>
+      </Text>
       <Text color="gray.600" mb={4}>
-        Deadline: {new Date(poll.deadline * 1000).toLocaleString()}
+        Deadline: {new Date(Number(poll.deadline) * 1000).toLocaleString()}
       </Text>
 
       {!hasVoted && !isExpired ? (
@@ -139,7 +143,7 @@ const PollCard = ({ poll }) => {
             labels: poll.options.map(opt => opt.text),
             datasets: [{
               label: 'Votes',
-              data: poll.options.map(opt => opt.voteCount),
+              data: poll.options.map(opt => Number(opt.voteCount)),
               backgroundColor: 'rgba(53, 162, 235, 0.5)',
             }]
           }} options={{ maintainAspectRatio: false }} />
@@ -159,46 +163,51 @@ const PollList = () => {
   const [error, setError] = useState(null);
   const { address } = useAccount();
 
-  const { data: pollCount, isError: isPollCountError } = useContractRead({
+  // Get poll count
+  const { data: pollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
   });
 
+  // Get individual poll data
+  const pollIds = pollCount ? [...Array(Number(pollCount)).keys()] : [];
+  const pollReads = pollIds.map(id => useContractRead({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'getPoll',
+    args: [id],
+    watch: true,
+  }));
+
   useEffect(() => {
-    const fetchPolls = async () => {
-      if (!pollCount) return;
-      
+    const updatePolls = () => {
       try {
         setLoading(true);
         setError(null);
-        console.log("Fetching polls. Count:", pollCount.toString());
 
-        const pollsData = [];
-        for (let i = 0; i < pollCount; i++) {
-          try {
-            const result = await useContractRead({
-              address: POLLS_CONTRACT_ADDRESS,
-              abi: DePollsABI,
-              functionName: 'getPoll',
-              args: [i],
-            });
-            
-            if (result && result.data) {
-              console.log("Poll", i, "data:", result.data);
-              pollsData.push(result.data);
-            }
-          } catch (err) {
-            console.error("Error fetching poll", i, ":", err);
-          }
-        }
+        console.log('Poll count:', pollCount ? pollCount.toString() : '0');
+        
+        const validPolls = pollReads
+          .map(read => read.data)
+          .filter(poll => poll && poll.isActive)
+          .map(poll => ({
+            ...poll,
+            id: Number(poll.id),
+            deadline: Number(poll.deadline),
+            options: poll.options.map(opt => ({
+              ...opt,
+              voteCount: Number(opt.voteCount)
+            }))
+          }));
 
-        const activePolls = pollsData.filter(poll => poll && poll.isActive);
-        console.log("Active polls:", activePolls.length);
-        setPolls(activePolls);
+        console.log('Valid polls:', validPolls.length);
+        console.log('Poll data:', validPolls);
+        
+        setPolls(validPolls);
       } catch (err) {
-        console.error("Error fetching polls:", err);
+        console.error('Error updating polls:', err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -206,9 +215,9 @@ const PollList = () => {
     };
 
     if (address) {
-      fetchPolls();
+      updatePolls();
     }
-  }, [pollCount, address]);
+  }, [address, pollCount, ...pollReads.map(read => read.data)]);
 
   if (!address) {
     return (
@@ -237,18 +246,11 @@ const PollList = () => {
     );
   }
 
-  if (isPollCountError) {
-    return (
-      <Alert status="error">
-        <AlertIcon />
-        Error fetching poll count
-      </Alert>
-    );
-  }
-
   return (
     <VStack spacing={6} align="stretch">
       <Heading size="lg">Active Polls</Heading>
+      <Text color="gray.600">Total polls created: {pollCount ? pollCount.toString() : '0'}</Text>
+      
       {polls.length === 0 ? (
         <Alert status="info">
           <AlertIcon />
