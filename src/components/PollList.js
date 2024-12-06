@@ -51,21 +51,32 @@ const PollCard = ({ poll }) => {
     functionName: 'hasVoted',
     args: [poll.id, address],
     watch: true,
+    enabled: !!address,
   });
 
-  const { config } = usePrepareContractWrite({
+  const { config, error: prepareError } = usePrepareContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'vote',
     args: [poll.id, selectedOptions],
-    enabled: selectedOptions.length > 0 && !hasVoted,
+    enabled: selectedOptions.length > 0 && !hasVoted && !!address,
   });
 
-  const { write: vote, isLoading } = useContractWrite(config);
+  const { write: vote, isLoading, error: writeError } = useContractWrite(config);
+
+  useEffect(() => {
+    console.log('Poll:', poll.id, 'Selected:', selectedOptions, 'HasVoted:', hasVoted);
+    console.log('PrepareError:', prepareError);
+    console.log('WriteError:', writeError);
+  }, [poll.id, selectedOptions, hasVoted, prepareError, writeError]);
 
   const handleVote = async () => {
     try {
-      await vote?.();
+      if (!vote) {
+        console.error('Vote function not ready:', prepareError || writeError);
+        return;
+      }
+      await vote();
       toast({
         title: 'Success',
         description: 'Vote submitted successfully',
@@ -73,9 +84,10 @@ const PollCard = ({ poll }) => {
         duration: 3000,
       });
     } catch (error) {
+      console.error('Vote error:', error);
       toast({
         title: 'Error',
-        description: error.message,
+        description: error.message || 'Failed to submit vote',
         status: 'error',
         duration: 3000,
       });
@@ -134,10 +146,17 @@ const PollCard = ({ poll }) => {
             colorScheme="blue"
             onClick={handleVote}
             isLoading={isLoading}
-            isDisabled={!vote || selectedOptions.length === 0}
+            isDisabled={selectedOptions.length === 0}
           >
             Vote
           </Button>
+
+          {(prepareError || writeError) && (
+            <Alert status="error" mt={2}>
+              <AlertIcon />
+              {(prepareError || writeError)?.message || 'Error preparing vote transaction'}
+            </Alert>
+          )}
         </VStack>
       ) : (
         <Box h="300px">
