@@ -12,9 +12,9 @@ import {
   Skeleton,
   HStack,
   Badge,
-  useDisclosure,
+  Center,
 } from '@chakra-ui/react';
-import { useContractRead, useAccount, useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
+import { useContractRead, useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import Poll from './Poll';
@@ -27,51 +27,81 @@ function PollList() {
   const [loading, setLoading] = useState(true);
   const containerWidth = { base: "95%", md: "90%", lg: "80%" };
 
-  const { data: pollCount } = useContractRead({
+  // Get poll count from contract
+  const { data: pollCount, isError: isPollCountError } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
   });
 
-  const fetchPoll = async (id, provider, contract) => {
+  // Function to safely convert BigNumber to number
+  const safeToNumber = (value) => {
     try {
-      const poll = await contract.getPoll(id);
-      if (poll.isActive) {
-        return {
-          id: poll.id.toNumber(),
-          creator: poll.creator,
-          question: poll.question,
-          options: poll.options.map(opt => ({
-            text: opt.text,
-            voteCount: opt.voteCount.toNumber()
-          })),
-          deadline: poll.deadline.toNumber(),
-          isWeighted: poll.isWeighted,
-          isMultipleChoice: poll.isMultipleChoice,
-          isActive: poll.isActive
-        };
-      }
+      if (!value) return 0;
+      if (typeof value === 'number') return value;
+      if (ethers.BigNumber.isBigNumber(value)) return value.toNumber();
+      return Number(value);
     } catch (error) {
-      console.error(`Error fetching poll ${id}:`, error);
+      console.error('Error converting value to number:', error);
+      return 0;
     }
-    return null;
   };
 
+  // Function to fetch a single poll
+  const fetchPoll = async (id, contract) => {
+    try {
+      const poll = await contract.getPoll(id);
+      
+      // Verify that we got valid poll data
+      if (!poll || !poll.question) {
+        console.warn(`Invalid poll data received for ID ${id}`);
+        return null;
+      }
+
+      // Convert poll data to proper format with safe number conversion
+      return {
+        id: safeToNumber(poll.id),
+        creator: poll.creator,
+        question: poll.question,
+        options: poll.options.map(opt => ({
+          text: opt.text,
+          voteCount: safeToNumber(opt.voteCount)
+        })),
+        deadline: safeToNumber(poll.deadline),
+        isWeighted: poll.isWeighted,
+        isMultipleChoice: poll.isMultipleChoice,
+        isActive: poll.isActive
+      };
+    } catch (error) {
+      console.error(`Error fetching poll ${id}:`, error);
+      return null;
+    }
+  };
+
+  // Function to fetch all polls
   const fetchPolls = async () => {
-    if (!pollCount || !address) return;
-    
+    if (!pollCount || !address || !window.ethereum) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const contract = new ethers.Contract(POLLS_CONTRACT_ADDRESS, DePollsABI, provider);
       
+      const count = safeToNumber(pollCount);
+      console.log('Total poll count:', count);
+
       const pollPromises = [];
-      for (let i = 0; i < pollCount.toNumber(); i++) {
-        pollPromises.push(fetchPoll(i, provider, contract));
+      for (let i = 0; i < count; i++) {
+        pollPromises.push(fetchPoll(i, contract));
       }
 
-      const fetchedPolls = (await Promise.all(pollPromises)).filter(poll => poll !== null);
+      const fetchedPolls = (await Promise.all(pollPromises))
+        .filter(poll => poll !== null && poll.isActive);
+
       console.log('Fetched polls:', fetchedPolls);
       setPolls(fetchedPolls);
     } catch (error) {
@@ -81,22 +111,51 @@ function PollList() {
         description: 'Failed to load polls. Please try again.',
         status: 'error',
         duration: 5000,
+        isClosable: true,
       });
     } finally {
       setLoading(false);
     }
   };
 
+  // Effect to fetch polls when address or pollCount changes
   useEffect(() => {
-    if (address && pollCount) {
-      fetchPolls();
+    if (isPollCountError) {
+      toast({
+        title: 'Error',
+        description: 'Failed to get poll count. Please check your connection.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+      setLoading(false);
+      return;
     }
-  }, [address, pollCount]);
 
+    fetchPolls();
+  }, [address, pollCount, isPollCountError]);
+
+  // Handler for poll updates
   const handlePollUpdate = () => {
     fetchPolls();
   };
 
+  // Render loading state
+  if (loading) {
+    return (
+      <Container maxW={containerWidth} py={8}>
+        <CreatePoll onPollCreated={handlePollUpdate} />
+        <Center py={8}>
+          <VStack spacing={4}>
+            <Spinner size="xl" color="brand.500" thickness="4px" />
+            <Text>Loading polls...</Text>
+          </VStack>
+        </Center>
+      </Container>
+    );
+  }
+
+  // Render wallet connection prompt
   if (!address) {
     return (
       <Container maxW={containerWidth} py={8}>
@@ -119,24 +178,14 @@ function PollList() {
     );
   }
 
-  if (loading) {
-    return (
-      <Container maxW={containerWidth} py={8}>
-        <CreatePoll onPollCreated={handlePollUpdate} />
-        <VStack spacing={6} align="stretch">
-          <Heading size="lg">Active Polls</Heading>
-          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} height="300px" borderRadius="xl" />
-            ))}
-          </SimpleGrid>
-        </VStack>
-      </Container>
-    );
-  }
+  // Filter active polls
+  const activePolls = polls.filter(poll => {
+    const deadline = new Date(poll.deadline * 1000);
+    const now = new Date();
+    return poll.isActive && deadline > now;
+  });
 
-  const activePolls = polls.filter(poll => poll.isActive && new Date(Number(poll.deadline) * 1000) > new Date());
-
+  // Render main content
   return (
     <Container maxW={containerWidth} py={8}>
       <CreatePoll onPollCreated={handlePollUpdate} />
