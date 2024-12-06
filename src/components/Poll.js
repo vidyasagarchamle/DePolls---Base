@@ -31,8 +31,9 @@ import {
   Td,
   Divider,
   useColorModeValue,
+  IconButton,
 } from '@chakra-ui/react';
-import { TimeIcon, CheckIcon, ViewIcon } from '@chakra-ui/icons';
+import { TimeIcon, CheckIcon, ViewIcon, DeleteIcon } from '@chakra-ui/icons';
 import { useContractWrite, usePrepareContractWrite, useAccount, useContractRead } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 
@@ -138,6 +139,50 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
     return <Badge colorScheme="blue">Active</Badge>;
   };
 
+  // Add delete poll functionality
+  const { config: deleteConfig } = usePrepareContractWrite({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'deletePoll',
+    args: [poll.id],
+    enabled: poll.isCreator,
+  });
+
+  const { write: deletePoll, isLoading: isDeleting } = useContractWrite({
+    ...deleteConfig,
+    onSuccess: () => {
+      toast({
+        title: 'Poll Deleted!',
+        description: 'Your poll has been deleted successfully.',
+        status: 'success',
+        duration: 5000,
+      });
+      if (onVote) onVote();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete poll',
+        status: 'error',
+        duration: 5000,
+      });
+    },
+  });
+
+  const handleDelete = () => {
+    if (!deletePoll) return;
+    
+    toast({
+      title: 'Deleting Poll...',
+      description: 'Please wait while your transaction is being processed.',
+      status: 'info',
+      duration: null,
+      id: 'deleting-poll',
+    });
+    
+    deletePoll();
+  };
+
   return (
     <>
       <Box
@@ -158,7 +203,22 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
         <VStack align="stretch" spacing={4}>
           <HStack justify="space-between" align="start">
             <Heading size="md" color="gray.700">{poll.question}</Heading>
-            {getStatusBadge()}
+            <HStack spacing={2}>
+              {getStatusBadge()}
+              {poll.isCreator && (
+                <Tooltip label="Delete Poll">
+                  <IconButton
+                    icon={<DeleteIcon />}
+                    colorScheme="red"
+                    variant="ghost"
+                    size="sm"
+                    isLoading={isDeleting}
+                    onClick={handleDelete}
+                    aria-label="Delete poll"
+                  />
+                </Tooltip>
+              )}
+            </HStack>
           </HStack>
 
           <HStack fontSize="sm" color="gray.500" spacing={4}>
