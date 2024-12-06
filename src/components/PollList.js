@@ -171,92 +171,86 @@ const PollList = () => {
     watch: true,
   });
 
-  // Get individual poll data
-  const { data: poll0 } = useContractRead({
+  // Get poll data
+  const { data: pollData } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'getPoll',
     args: [0],
-    enabled: pollCount && Number(pollCount) > 0,
-  });
-
-  const { data: poll1 } = useContractRead({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'getPoll',
-    args: [1],
-    enabled: pollCount && Number(pollCount) > 1,
-  });
-
-  const { data: poll2 } = useContractRead({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'getPoll',
-    args: [2],
-    enabled: pollCount && Number(pollCount) > 2,
-  });
-
-  const { data: poll3 } = useContractRead({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'getPoll',
-    args: [3],
-    enabled: pollCount && Number(pollCount) > 3,
-  });
-
-  const { data: poll4 } = useContractRead({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'getPoll',
-    args: [4],
-    enabled: pollCount && Number(pollCount) > 4,
+    watch: true,
   });
 
   useEffect(() => {
-    const updatePolls = () => {
+    const loadPolls = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        console.log('Poll count:', pollCount ? pollCount.toString() : '0');
-        
-        const allPolls = [poll0, poll1, poll2, poll3, poll4]
-          .filter(poll => {
-            if (!poll) return false;
-            console.log('Processing poll:', poll);
-            return (
-              poll.id !== undefined &&
-              poll.options !== undefined &&
-              Array.isArray(poll.options) &&
-              poll.isActive
-            );
-          })
-          .map(poll => {
-            try {
-              return {
-                id: Number(poll.id),
-                creator: poll.creator,
-                question: poll.question,
-                deadline: Number(poll.deadline),
-                isWeighted: poll.isWeighted,
-                isMultipleChoice: poll.isMultipleChoice,
-                isActive: poll.isActive,
-                options: poll.options.map(opt => ({
-                  text: opt.text,
-                  voteCount: Number(opt.voteCount)
-                }))
-              };
-            } catch (err) {
-              console.error('Error processing poll:', poll, err);
-              return null;
-            }
-          })
-          .filter(poll => poll !== null);
+        if (!pollCount) {
+          console.log('No poll count available');
+          return;
+        }
 
-        console.log('Processed polls:', allPolls);
-        setPolls(allPolls);
+        console.log('Total polls:', pollCount.toString());
+        console.log('Sample poll data:', pollData);
+
+        const fetchedPolls = [];
+        for (let i = 0; i < Number(pollCount); i++) {
+          try {
+            const result = await fetch(
+              `https://eth-sepolia.g.alchemy.com/v2/WOkDJG0SS7qXPGXTZ72ib-4O_Ie9FFbY`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 1,
+                  method: 'eth_call',
+                  params: [
+                    {
+                      to: POLLS_CONTRACT_ADDRESS,
+                      data: `0x${DePollsABI
+                        .find(item => item.name === 'getPoll')
+                        .inputs[0]
+                        .type}${i.toString(16).padStart(64, '0')}`,
+                    },
+                    'latest',
+                  ],
+                }),
+              }
+            );
+
+            const data = await result.json();
+            console.log(`Poll ${i} raw data:`, data);
+
+            if (data.result) {
+              const poll = {
+                id: i,
+                creator: `0x${data.result.slice(26, 66)}`,
+                question: data.result.slice(66, 130),
+                deadline: parseInt(data.result.slice(130, 194), 16),
+                isWeighted: data.result.slice(194, 258) === '1',
+                isMultipleChoice: data.result.slice(258, 322) === '1',
+                isActive: data.result.slice(322, 386) === '1',
+                options: JSON.parse(data.result.slice(386)),
+              };
+
+              if (poll.isActive) {
+                console.log(`Poll ${i} processed:`, poll);
+                fetchedPolls.push(poll);
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching poll ${i}:`, err);
+          }
+        }
+
+        console.log('All fetched polls:', fetchedPolls);
+        setPolls(fetchedPolls);
       } catch (err) {
-        console.error('Error updating polls:', err);
+        console.error('Error loading polls:', err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -264,9 +258,9 @@ const PollList = () => {
     };
 
     if (address && pollCount) {
-      updatePolls();
+      loadPolls();
     }
-  }, [address, pollCount, poll0, poll1, poll2, poll3, poll4]);
+  }, [address, pollCount, pollData]);
 
   if (!address) {
     return (
