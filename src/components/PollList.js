@@ -219,28 +219,34 @@ const PollList = () => {
         setError(null);
 
         console.log('Poll count:', pollCount ? pollCount.toString() : '0');
-        console.log('Poll 0:', poll0);
-        console.log('Poll 1:', poll1);
-        console.log('Poll 2:', poll2);
-        console.log('Poll 3:', poll3);
-        console.log('Poll 4:', poll4);
-
+        
         const allPolls = [poll0, poll1, poll2, poll3, poll4]
-          .filter(poll => poll) // Remove undefined polls
-          .map(poll => ({
-            id: Number(poll.id),
-            creator: poll.creator,
-            question: poll.question,
-            deadline: Number(poll.deadline),
-            isWeighted: poll.isWeighted,
-            isMultipleChoice: poll.isMultipleChoice,
-            isActive: poll.isActive,
-            options: poll.options.map(opt => ({
-              text: opt.text,
-              voteCount: Number(opt.voteCount)
-            }))
-          }))
-          .filter(poll => poll.isActive);
+          .filter(poll => {
+            if (!poll) return false;
+            console.log('Processing poll:', poll);
+            return true;
+          })
+          .map(poll => {
+            try {
+              return {
+                id: Number(poll.id),
+                creator: poll.creator,
+                question: poll.question,
+                deadline: Number(poll.deadline),
+                isWeighted: poll.isWeighted,
+                isMultipleChoice: poll.isMultipleChoice,
+                isActive: poll.isActive,
+                options: Array.isArray(poll.options) ? poll.options.map(opt => ({
+                  text: opt.text,
+                  voteCount: Number(opt.voteCount)
+                })) : []
+              };
+            } catch (err) {
+              console.error('Error processing poll:', err);
+              return null;
+            }
+          })
+          .filter(poll => poll && poll.isActive);
 
         console.log('Processed polls:', allPolls);
         setPolls(allPolls);
