@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -29,9 +29,12 @@ import {
   Progress,
   Container,
   Skeleton,
+  SimpleGrid,
+  useBreakpointValue,
 } from '@chakra-ui/react';
 import { DeleteIcon, TimeIcon, CheckIcon } from '@chakra-ui/icons';
 import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
+import { ethers } from 'ethers';
 import { DePollsABI } from '../contracts/abis';
 
 const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
@@ -39,6 +42,9 @@ const POLLS_CONTRACT_ADDRESS = "0x41395582EDE920Dcef10fea984c9A0459885E8eB";
 function PollList() {
   const { address } = useAccount();
   const toast = useToast();
+  const [polls, setPolls] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const containerWidth = useBreakpointValue({ base: "95%", md: "90%", lg: "80%" });
 
   const { data: pollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
@@ -47,16 +53,58 @@ function PollList() {
     watch: true,
   });
 
-  const { data: polls = [], isLoading: isLoadingPolls } = useContractRead({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'getPolls',
-    watch: true,
-  });
+  useEffect(() => {
+    const fetchPolls = async () => {
+      if (!pollCount || !address) return;
+      
+      try {
+        setLoading(true);
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const contract = new ethers.Contract(POLLS_CONTRACT_ADDRESS, DePollsABI, provider);
+        
+        const fetchedPolls = [];
+        for (let i = 0; i < Number(pollCount); i++) {
+          try {
+            const poll = await contract.getPoll(i);
+            if (poll.isActive) {
+              fetchedPolls.push({
+                id: poll.id.toNumber(),
+                creator: poll.creator,
+                question: poll.question,
+                options: poll.options.map(opt => ({
+                  text: opt.text,
+                  voteCount: opt.voteCount.toNumber()
+                })),
+                deadline: poll.deadline.toNumber(),
+                isWeighted: poll.isWeighted,
+                isMultipleChoice: poll.isMultipleChoice,
+                isActive: poll.isActive
+              });
+            }
+          } catch (error) {
+            console.error(`Error fetching poll ${i}:`, error);
+          }
+        }
+        setPolls(fetchedPolls);
+      } catch (error) {
+        console.error('Error fetching polls:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load polls. Please try again.',
+          status: 'error',
+          duration: 5000,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPolls();
+  }, [address, pollCount, toast]);
 
   if (!address) {
     return (
-      <Container maxW="container.lg" py={8}>
+      <Container maxW={containerWidth} py={8}>
         <Alert
           status="info"
           variant="subtle"
@@ -75,14 +123,16 @@ function PollList() {
     );
   }
 
-  if (isLoadingPolls) {
+  if (loading) {
     return (
-      <Container maxW="container.lg" py={8}>
+      <Container maxW={containerWidth} py={8}>
         <VStack spacing={6} align="stretch">
           <Heading size="lg">Active Polls</Heading>
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} height="200px" borderRadius="xl" />
-          ))}
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} height="300px" borderRadius="xl" />
+            ))}
+          </SimpleGrid>
         </VStack>
       </Container>
     );
@@ -91,11 +141,11 @@ function PollList() {
   const activePolls = polls.filter(poll => poll.isActive && new Date(Number(poll.deadline) * 1000) > new Date());
 
   return (
-    <Container maxW="container.lg" py={8}>
-      <VStack spacing={6} align="stretch">
-        <HStack justify="space-between">
+    <Container maxW={containerWidth} py={8}>
+      <VStack spacing={8} align="stretch">
+        <HStack justify="space-between" wrap="wrap" spacing={4}>
           <Heading size="lg">Active Polls</Heading>
-          <Badge colorScheme="brand" p={2} borderRadius="lg">
+          <Badge colorScheme="brand" p={2} borderRadius="lg" fontSize="md">
             Total Polls: {pollCount?.toString() || '0'}
           </Badge>
         </HStack>
@@ -116,11 +166,11 @@ function PollList() {
             <Text>Create a new poll to get started!</Text>
           </Alert>
         ) : (
-          <VStack spacing={6}>
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
             {activePolls.map((poll) => (
               <PollCard key={poll.id} poll={poll} />
             ))}
-          </VStack>
+          </SimpleGrid>
         )}
       </VStack>
     </Container>
@@ -199,11 +249,14 @@ const PollCard = ({ poll }) => {
   return (
     <Box
       bg="white"
-      p={6}
+      p={{ base: 4, md: 6 }}
       borderRadius="xl"
       boxShadow="sm"
       borderWidth={1}
       borderColor="gray.200"
+      height="100%"
+      display="flex"
+      flexDirection="column"
       _hover={{
         borderColor: 'brand.500',
         transform: 'translateY(-2px)',
@@ -211,14 +264,14 @@ const PollCard = ({ poll }) => {
         transition: 'all 0.2s',
       }}
     >
-      <Flex justify="space-between" align="center" mb={4}>
-        <VStack align="start" spacing={1}>
-          <Heading size="md">{poll.question}</Heading>
-          <Text fontSize="sm" color="gray.500">
-            Created by: <Code>{poll.creator}</Code>
+      <Flex justify="space-between" align="flex-start" mb={4}>
+        <VStack align="start" spacing={1} flex={1}>
+          <Heading size="md" noOfLines={2}>{poll.question}</Heading>
+          <Text fontSize="sm" color="gray.500" noOfLines={1}>
+            Created by: <Code fontSize="xs">{poll.creator}</Code>
           </Text>
         </VStack>
-        <HStack spacing={2}>
+        <HStack spacing={2} ml={2}>
           {isExpired ? (
             <Badge colorScheme="red">Expired</Badge>
           ) : (
@@ -239,84 +292,87 @@ const PollCard = ({ poll }) => {
         </HStack>
       </Flex>
 
-      <HStack color="gray.600" mb={4}>
+      <HStack color="gray.600" mb={4} fontSize="sm">
         <TimeIcon />
-        <Text fontSize="sm">
+        <Text noOfLines={1}>
           Ends: {new Date(Number(poll.deadline) * 1000).toLocaleString()}
         </Text>
       </HStack>
 
-      {!hasVoted && !isExpired ? (
-        <VStack align="stretch" spacing={4}>
-          {poll.isMultipleChoice ? (
-            <Stack spacing={3}>
-              {poll.options.map((option, index) => (
-                <Checkbox
-                  key={index}
-                  isChecked={selectedOptions.includes(index)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedOptions([...selectedOptions, index]);
-                    } else {
-                      setSelectedOptions(selectedOptions.filter(i => i !== index));
-                    }
-                  }}
-                >
-                  {option.text}
-                </Checkbox>
-              ))}
-            </Stack>
-          ) : (
-            <RadioGroup
-              onChange={(value) => setSelectedOptions([parseInt(value)])}
-              value={selectedOptions[0]?.toString()}
-            >
+      <Box flex={1}>
+        {!hasVoted && !isExpired ? (
+          <VStack align="stretch" spacing={4}>
+            {poll.isMultipleChoice ? (
               <Stack spacing={3}>
                 {poll.options.map((option, index) => (
-                  <Radio key={index} value={index.toString()}>
+                  <Checkbox
+                    key={index}
+                    isChecked={selectedOptions.includes(index)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedOptions([...selectedOptions, index]);
+                      } else {
+                        setSelectedOptions(selectedOptions.filter(i => i !== index));
+                      }
+                    }}
+                  >
                     {option.text}
-                  </Radio>
+                  </Checkbox>
                 ))}
               </Stack>
-            </RadioGroup>
-          )}
+            ) : (
+              <RadioGroup
+                onChange={(value) => setSelectedOptions([parseInt(value)])}
+                value={selectedOptions[0]?.toString()}
+              >
+                <Stack spacing={3}>
+                  {poll.options.map((option, index) => (
+                    <Radio key={index} value={index.toString()}>
+                      {option.text}
+                    </Radio>
+                  ))}
+                </Stack>
+              </RadioGroup>
+            )}
 
-          <Button
-            onClick={() => vote?.()}
-            isLoading={isVoting}
-            isDisabled={selectedOptions.length === 0}
-            leftIcon={<CheckIcon />}
-            size="lg"
-          >
-            Submit Vote
-          </Button>
-        </VStack>
-      ) : (
-        <VStack align="stretch" spacing={4}>
-          {poll.options.map((option, index) => (
-            <Box key={index}>
-              <Flex justify="space-between" mb={1}>
-                <Text>{option.text}</Text>
-                <Text color="gray.600">
-                  {Number(option.voteCount)} votes ({totalVotes > 0 ? ((Number(option.voteCount) / totalVotes) * 100).toFixed(1) : 0}%)
-                </Text>
-              </Flex>
-              <Progress
-                value={totalVotes > 0 ? (Number(option.voteCount) / totalVotes) * 100 : 0}
-                size="sm"
-                colorScheme="brand"
-                borderRadius="full"
-              />
-            </Box>
-          ))}
-          {hasVoted && (
-            <Badge alignSelf="start" colorScheme="brand" variant="subtle">
-              <CheckIcon mr={2} />
-              You have voted
-            </Badge>
-          )}
-        </VStack>
-      )}
+            <Button
+              onClick={() => vote?.()}
+              isLoading={isVoting}
+              isDisabled={selectedOptions.length === 0}
+              leftIcon={<CheckIcon />}
+              size="md"
+              mt="auto"
+            >
+              Submit Vote
+            </Button>
+          </VStack>
+        ) : (
+          <VStack align="stretch" spacing={4}>
+            {poll.options.map((option, index) => (
+              <Box key={index}>
+                <Flex justify="space-between" mb={1}>
+                  <Text noOfLines={1}>{option.text}</Text>
+                  <Text color="gray.600" ml={2}>
+                    {Number(option.voteCount)} votes ({totalVotes > 0 ? ((Number(option.voteCount) / totalVotes) * 100).toFixed(1) : 0}%)
+                  </Text>
+                </Flex>
+                <Progress
+                  value={totalVotes > 0 ? (Number(option.voteCount) / totalVotes) * 100 : 0}
+                  size="sm"
+                  colorScheme="brand"
+                  borderRadius="full"
+                />
+              </Box>
+            ))}
+            {hasVoted && (
+              <Badge alignSelf="start" colorScheme="brand" variant="subtle">
+                <CheckIcon mr={2} />
+                You have voted
+              </Badge>
+            )}
+          </VStack>
+        )}
+      </Box>
 
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />
