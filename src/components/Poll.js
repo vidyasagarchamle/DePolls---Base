@@ -140,78 +140,78 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
   };
 
   // Add delete poll functionality
-  const { config: deleteConfig } = usePrepareContractWrite({
+  const { config: closeConfig } = usePrepareContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
-    functionName: 'deletePoll',
+    functionName: 'closePoll',
     args: [poll.id],
-    enabled: poll.isCreator,
+    enabled: poll.isCreator && poll.isActive,
   });
 
-  const { write: deletePoll, isLoading: isDeleting, data: deleteData } = useContractWrite({
-    ...deleteConfig,
+  const { write: closePoll, isLoading: isClosing, data: closeData } = useContractWrite({
+    ...closeConfig,
     onMutate: () => {
       toast({
-        title: 'Preparing Deletion',
+        title: 'Preparing to Close Poll',
         description: 'Please confirm the transaction in your wallet.',
         status: 'info',
         duration: null,
-        id: 'deleting-poll-prepare',
+        id: 'closing-poll-prepare',
       });
     },
     onSuccess: () => {
-      toast.close('deleting-poll-prepare');
+      toast.close('closing-poll-prepare');
       toast({
         title: 'Transaction Submitted',
-        description: 'Your poll is being deleted. Please wait for confirmation.',
+        description: 'Your poll is being closed. Please wait for confirmation.',
         status: 'info',
         duration: null,
-        id: 'deleting-poll',
+        id: 'closing-poll',
       });
     },
     onError: (error) => {
-      toast.close('deleting-poll-prepare');
+      toast.close('closing-poll-prepare');
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete poll',
+        description: error.message || 'Failed to close poll',
         status: 'error',
         duration: 5000,
       });
     },
   });
 
-  const { isLoading: isWaitingDelete } = useWaitForTransaction({
-    hash: deleteData?.hash,
+  const { isLoading: isWaitingClose } = useWaitForTransaction({
+    hash: closeData?.hash,
     onSuccess: () => {
-      toast.close('deleting-poll');
+      toast.close('closing-poll');
       toast({
         title: 'Success!',
-        description: 'Your poll has been deleted successfully.',
+        description: 'Your poll has been closed successfully.',
         status: 'success',
         duration: 5000,
       });
       if (onVote) onVote();
     },
     onError: (error) => {
-      toast.close('deleting-poll');
+      toast.close('closing-poll');
       toast({
         title: 'Error',
-        description: 'Failed to delete poll. Please try again.',
+        description: 'Failed to close poll. Please try again.',
         status: 'error',
         duration: 5000,
       });
     },
   });
 
-  const handleDelete = () => {
-    if (!deletePoll) return;
+  const handleClose = () => {
+    if (!closePoll) return;
     try {
-      deletePoll();
+      closePoll();
     } catch (error) {
-      console.error('Delete error:', error);
+      console.error('Close error:', error);
       toast({
         title: 'Error',
-        description: 'Failed to submit deletion. Please try again.',
+        description: 'Failed to submit transaction. Please try again.',
         status: 'error',
         duration: 5000,
       });
@@ -240,16 +240,16 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
             <Heading size="md" color="gray.700">{poll.question}</Heading>
             <HStack spacing={2}>
               {getStatusBadge()}
-              {poll.isCreator && (
-                <Tooltip label="Delete Poll">
+              {poll.isCreator && poll.isActive && (
+                <Tooltip label="Close Poll">
                   <IconButton
                     icon={<DeleteIcon />}
                     colorScheme="red"
                     variant="ghost"
                     size="sm"
-                    isLoading={isDeleting}
-                    onClick={handleDelete}
-                    aria-label="Delete poll"
+                    isLoading={isClosing || isWaitingClose}
+                    onClick={handleClose}
+                    aria-label="Close poll"
                   />
                 </Tooltip>
               )}
