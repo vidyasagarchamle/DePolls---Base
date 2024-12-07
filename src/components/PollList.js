@@ -18,6 +18,7 @@ import {
   Tab,
   TabPanel,
   useColorModeValue,
+  Divider,
 } from '@chakra-ui/react';
 import { useContractRead, useAccount } from 'wagmi';
 import { ethers } from 'ethers';
@@ -192,7 +193,12 @@ function PollList() {
     return poll.isActive && deadline > now && !poll.isCreator;
   });
 
-  const myPolls = polls.filter(poll => poll.isCreator);
+  const myPolls = polls.filter(poll => {
+    return poll.isCreator;
+  });
+
+  const activeMyPolls = myPolls.filter(poll => poll.isActive);
+  const closedMyPolls = myPolls.filter(poll => !poll.isActive);
 
   // Render main content
   return (
@@ -261,16 +267,42 @@ function PollList() {
                   <Text>You haven't created any polls yet. Create one to get started!</Text>
                 </Alert>
               ) : (
-                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                  {myPolls.map((poll) => (
-                    <Poll 
-                      key={poll.id} 
-                      poll={poll} 
-                      onVote={handlePollUpdate}
-                      showVoterDetails={true}
-                    />
-                  ))}
-                </SimpleGrid>
+                <VStack spacing={8} align="stretch">
+                  {/* Active Polls Section */}
+                  {activeMyPolls.length > 0 && (
+                    <>
+                      <Heading size="md" color="gray.700">Active Polls</Heading>
+                      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                        {activeMyPolls.map((poll) => (
+                          <Poll 
+                            key={poll.id} 
+                            poll={poll} 
+                            onVote={handlePollUpdate}
+                            showVoterDetails={true}
+                          />
+                        ))}
+                      </SimpleGrid>
+                    </>
+                  )}
+
+                  {/* Closed Polls Section */}
+                  {closedMyPolls.length > 0 && (
+                    <>
+                      <Divider my={4} />
+                      <Heading size="md" color="gray.700">Closed Polls</Heading>
+                      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                        {closedMyPolls.map((poll) => (
+                          <Poll 
+                            key={poll.id} 
+                            poll={poll} 
+                            onVote={handlePollUpdate}
+                            showVoterDetails={true}
+                          />
+                        ))}
+                      </SimpleGrid>
+                    </>
+                  )}
+                </VStack>
               )}
             </VStack>
           </TabPanel>
