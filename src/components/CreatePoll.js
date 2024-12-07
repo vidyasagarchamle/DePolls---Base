@@ -55,11 +55,21 @@ const CreatePoll = ({ onPollCreated }) => {
 
   const { write: createPoll, isLoading: isCreating, data } = useContractWrite({
     ...config,
-    onSuccess: () => {
+    onMutate: () => {
       setIsProcessing(true);
       toast({
-        title: 'Creating Poll...',
-        description: 'Your transaction has been submitted. Please wait for confirmation.',
+        title: 'Preparing Transaction',
+        description: 'Please confirm the transaction in your wallet.',
+        status: 'info',
+        duration: null,
+        id: 'creating-poll-prepare',
+      });
+    },
+    onSuccess: () => {
+      toast.close('creating-poll-prepare');
+      toast({
+        title: 'Transaction Submitted',
+        description: 'Your poll is being created. Please wait for confirmation.',
         status: 'info',
         duration: null,
         id: 'creating-poll',
@@ -67,6 +77,7 @@ const CreatePoll = ({ onPollCreated }) => {
     },
     onError: (error) => {
       setIsProcessing(false);
+      toast.close('creating-poll-prepare');
       toast({
         title: 'Error',
         description: error.message || 'Failed to create poll',
@@ -83,7 +94,7 @@ const CreatePoll = ({ onPollCreated }) => {
       setIsProcessing(false);
       toast.close('creating-poll');
       toast({
-        title: 'Poll Created!',
+        title: 'Success!',
         description: 'Your poll has been created successfully.',
         status: 'success',
         duration: 5000,
@@ -147,7 +158,18 @@ const CreatePoll = ({ onPollCreated }) => {
       return;
     }
 
-    createPoll();
+    try {
+      createPoll();
+    } catch (error) {
+      console.error('Submit error:', error);
+      setIsProcessing(false);
+      toast({
+        title: 'Error',
+        description: 'Failed to submit transaction. Please try again.',
+        status: 'error',
+        duration: 5000,
+      });
+    }
   };
 
   const isFormValid = question.trim() !== '' && validOptions.length >= 2;

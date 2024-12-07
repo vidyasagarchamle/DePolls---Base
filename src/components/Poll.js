@@ -34,7 +34,7 @@ import {
   IconButton,
 } from '@chakra-ui/react';
 import { TimeIcon, CheckIcon, ViewIcon, DeleteIcon } from '@chakra-ui/icons';
-import { useContractWrite, usePrepareContractWrite, useAccount, useContractRead } from 'wagmi';
+import { useContractWrite, usePrepareContractWrite, useAccount, useContractRead, useWaitForTransaction } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 
 const Poll = ({ poll, onVote, showVoterDetails = false }) => {
@@ -148,18 +148,29 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
     enabled: poll.isCreator,
   });
 
-  const { write: deletePoll, isLoading: isDeleting } = useContractWrite({
+  const { write: deletePoll, isLoading: isDeleting, data: deleteData } = useContractWrite({
     ...deleteConfig,
-    onSuccess: () => {
+    onMutate: () => {
       toast({
-        title: 'Poll Deleted!',
-        description: 'Your poll has been deleted successfully.',
-        status: 'success',
-        duration: 5000,
+        title: 'Preparing Deletion',
+        description: 'Please confirm the transaction in your wallet.',
+        status: 'info',
+        duration: null,
+        id: 'deleting-poll-prepare',
       });
-      if (onVote) onVote();
+    },
+    onSuccess: () => {
+      toast.close('deleting-poll-prepare');
+      toast({
+        title: 'Transaction Submitted',
+        description: 'Your poll is being deleted. Please wait for confirmation.',
+        status: 'info',
+        duration: null,
+        id: 'deleting-poll',
+      });
     },
     onError: (error) => {
+      toast.close('deleting-poll-prepare');
       toast({
         title: 'Error',
         description: error.message || 'Failed to delete poll',
@@ -169,18 +180,42 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
     },
   });
 
+  const { isLoading: isWaitingDelete } = useWaitForTransaction({
+    hash: deleteData?.hash,
+    onSuccess: () => {
+      toast.close('deleting-poll');
+      toast({
+        title: 'Success!',
+        description: 'Your poll has been deleted successfully.',
+        status: 'success',
+        duration: 5000,
+      });
+      if (onVote) onVote();
+    },
+    onError: (error) => {
+      toast.close('deleting-poll');
+      toast({
+        title: 'Error',
+        description: 'Failed to delete poll. Please try again.',
+        status: 'error',
+        duration: 5000,
+      });
+    },
+  });
+
   const handleDelete = () => {
     if (!deletePoll) return;
-    
-    toast({
-      title: 'Deleting Poll...',
-      description: 'Please wait while your transaction is being processed.',
-      status: 'info',
-      duration: null,
-      id: 'deleting-poll',
-    });
-    
-    deletePoll();
+    try {
+      deletePoll();
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to submit deletion. Please try again.',
+        status: 'error',
+        duration: 5000,
+      });
+    }
   };
 
   return (
