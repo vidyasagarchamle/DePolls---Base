@@ -69,11 +69,16 @@ const CreatePoll = ({ onPollCreated }) => {
       toast.close('creating-poll-prepare');
       toast({
         title: 'Transaction Submitted',
-        description: 'Your poll is being created. Please wait for confirmation.',
+        description: 'Your poll is being created.',
         status: 'info',
         duration: null,
         id: 'creating-poll',
       });
+      
+      // Call onPollCreated immediately after transaction is sent
+      if (onPollCreated) {
+        onPollCreated();
+      }
     },
     onError: (error) => {
       setIsProcessing(false);
@@ -100,6 +105,8 @@ const CreatePoll = ({ onPollCreated }) => {
         duration: 5000,
       });
       resetForm();
+      
+      // Call onPollCreated again after confirmation to ensure UI is up to date
       if (onPollCreated) {
         onPollCreated();
       }
@@ -107,19 +114,20 @@ const CreatePoll = ({ onPollCreated }) => {
     onError: (error) => {
       setIsProcessing(false);
       toast.close('creating-poll');
-      // Check if it's a transaction not found error
       if (error.message.includes('could not be found')) {
-        // Transaction might still be pending, let's wait for onPollCreated callback
+        // Transaction might still be pending, let's wait and retry
+        setTimeout(() => {
+          if (onPollCreated) {
+            onPollCreated();
+          }
+        }, 2000);
+        
         toast({
           title: 'Transaction Status Unknown',
-          description: 'Your transaction might still be processing. Please wait a moment and check if your poll appears.',
+          description: 'Your poll might still be processing. Please wait a moment.',
           status: 'warning',
           duration: 10000,
         });
-        // Still call onPollCreated to refresh the list
-        if (onPollCreated) {
-          onPollCreated();
-        }
       } else {
         toast({
           title: 'Error',

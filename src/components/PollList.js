@@ -40,6 +40,7 @@ function PollList() {
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
+    cacheTime: 0, // Disable caching to always get fresh data
   });
 
   // Function to safely convert BigNumber to number
@@ -67,7 +68,6 @@ function PollList() {
         return null;
       }
 
-      // Convert poll data to proper format with safe number conversion
       return {
         id: safeToNumber(poll.id),
         creator: poll.creator,
@@ -104,16 +104,42 @@ function PollList() {
       const count = safeToNumber(pollCount);
       console.log('Total poll count:', count);
 
+      // Fetch the latest poll first
+      const latestPollId = count - 1;
+      if (latestPollId >= 0) {
+        const latestPoll = await fetchPoll(latestPollId, contract);
+        if (latestPoll) {
+          setPolls(prevPolls => {
+            // Add the new poll if it doesn't exist
+            const exists = prevPolls.some(p => p.id === latestPoll.id);
+            if (!exists) {
+              return [...prevPolls, latestPoll];
+            }
+            return prevPolls;
+          });
+        }
+      }
+
+      // Then fetch all other polls
       const pollPromises = [];
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < count - 1; i++) {
         pollPromises.push(fetchPoll(i, contract));
       }
 
       const fetchedPolls = (await Promise.all(pollPromises))
         .filter(poll => poll !== null);
 
-      console.log('Fetched polls:', fetchedPolls);
-      setPolls(fetchedPolls);
+      setPolls(prevPolls => {
+        // Merge new polls with existing ones, avoiding duplicates
+        const newPolls = [...prevPolls];
+        fetchedPolls.forEach(poll => {
+          const exists = newPolls.some(p => p.id === poll.id);
+          if (!exists) {
+            newPolls.push(poll);
+          }
+        });
+        return newPolls;
+      });
     } catch (error) {
       console.error('Error fetching polls:', error);
       toast({
@@ -128,6 +154,7 @@ function PollList() {
     }
   };
 
+  // Effect to fetch polls when address or pollCount changes
   useEffect(() => {
     if (isPollCountError) {
       toast({
@@ -144,6 +171,7 @@ function PollList() {
     fetchPolls();
   }, [address, pollCount, isPollCountError]);
 
+  // Handler for poll updates
   const handlePollUpdate = () => {
     fetchPolls();
   };
