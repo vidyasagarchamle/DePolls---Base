@@ -65,7 +65,7 @@ const CreatePoll = ({ onPollCreated }) => {
         id: 'creating-poll-prepare',
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.close('creating-poll-prepare');
       toast({
         title: 'Transaction Submitted',
@@ -107,12 +107,27 @@ const CreatePoll = ({ onPollCreated }) => {
     onError: (error) => {
       setIsProcessing(false);
       toast.close('creating-poll');
-      toast({
-        title: 'Error',
-        description: 'Failed to create poll. Please try again.',
-        status: 'error',
-        duration: 5000,
-      });
+      // Check if it's a transaction not found error
+      if (error.message.includes('could not be found')) {
+        // Transaction might still be pending, let's wait for onPollCreated callback
+        toast({
+          title: 'Transaction Status Unknown',
+          description: 'Your transaction might still be processing. Please wait a moment and check if your poll appears.',
+          status: 'warning',
+          duration: 10000,
+        });
+        // Still call onPollCreated to refresh the list
+        if (onPollCreated) {
+          onPollCreated();
+        }
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to create poll. Please try again.',
+          status: 'error',
+          duration: 5000,
+        });
+      }
       console.error('Transaction error:', error);
     },
   });

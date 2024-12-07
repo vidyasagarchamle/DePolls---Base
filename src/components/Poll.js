@@ -139,7 +139,7 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
     return <Badge colorScheme="blue">Active</Badge>;
   };
 
-  // Add delete poll functionality
+  // Close poll functionality
   const { config: closeConfig } = usePrepareContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
@@ -194,12 +194,22 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
     },
     onError: (error) => {
       toast.close('closing-poll');
-      toast({
-        title: 'Error',
-        description: 'Failed to close poll. Please try again.',
-        status: 'error',
-        duration: 5000,
-      });
+      if (error.message.includes('could not be found')) {
+        toast({
+          title: 'Transaction Status Unknown',
+          description: 'Your transaction might still be processing. Please wait a moment and check the poll status.',
+          status: 'warning',
+          duration: 10000,
+        });
+        if (onVote) onVote();
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to close poll. Please try again.',
+          status: 'error',
+          duration: 5000,
+        });
+      }
     },
   });
 
@@ -241,7 +251,7 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
             <HStack spacing={2}>
               {getStatusBadge()}
               {poll.isCreator && poll.isActive && (
-                <Tooltip label="Close Poll">
+                <Tooltip label="Delete Poll">
                   <IconButton
                     icon={<DeleteIcon />}
                     colorScheme="red"
@@ -249,7 +259,7 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
                     size="sm"
                     isLoading={isClosing || isWaitingClose}
                     onClick={handleClose}
-                    aria-label="Close poll"
+                    aria-label="Delete poll"
                   />
                 </Tooltip>
               )}
@@ -401,6 +411,32 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
           </ModalBody>
           <ModalFooter>
             <Button onClick={onClose}>Close</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Confirmation Modal */}
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent>
+          <ModalHeader>Delete Poll</ModalHeader>
+          <ModalBody>
+            <Text>Are you sure you want to delete this poll? This action cannot be undone.</Text>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              colorScheme="red"
+              onClick={() => {
+                handleClose();
+                onClose();
+              }}
+              isLoading={isClosing || isWaitingClose}
+            >
+              Delete
+            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
