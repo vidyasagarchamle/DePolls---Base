@@ -39,105 +39,14 @@ import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 
 const Poll = ({ poll, onVote, showVoterDetails = false }) => {
   const [selectedOptions, setSelectedOptions] = useState([]);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
   const { address } = useAccount();
-  const { isOpen, onOpen, onClose } = useDisclosure();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
 
   const isExpired = poll.deadline * 1000 < Date.now();
   const totalVotes = poll.options.reduce((sum, opt) => sum + Number(opt.voteCount), 0);
-
-  // Get voter details for the poll
-  const { data: voterDetails } = useContractRead({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'getPollVoters',
-    args: [poll.id],
-    enabled: showVoterDetails && poll.isCreator,
-    watch: true,
-  });
-
-  const { config } = usePrepareContractWrite({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'vote',
-    args: [poll.id, selectedOptions],
-    enabled: selectedOptions.length > 0 && !poll.hasVoted && !isExpired && !poll.isCreator,
-  });
-
-  const { write: vote, isLoading: isVoting } = useContractWrite({
-    ...config,
-    onSuccess: () => {
-      toast({
-        title: 'Vote submitted!',
-        description: 'Your vote has been recorded.',
-        status: 'success',
-        duration: 5000,
-      });
-      if (onVote) onVote();
-    },
-    onError: (error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to submit vote',
-        status: 'error',
-        duration: 5000,
-      });
-    },
-  });
-
-  const handleVote = () => {
-    if (!address) {
-      toast({
-        title: 'Connect Wallet',
-        description: 'Please connect your wallet to vote',
-        status: 'warning',
-        duration: 5000,
-      });
-      return;
-    }
-    if (selectedOptions.length === 0) {
-      toast({
-        title: 'Select Option',
-        description: 'Please select at least one option',
-        status: 'warning',
-        duration: 5000,
-      });
-      return;
-    }
-    vote?.();
-  };
-
-  const handleOptionSelect = (value) => {
-    if (poll.isMultipleChoice) {
-      const optionIndex = parseInt(value);
-      if (selectedOptions.includes(optionIndex)) {
-        setSelectedOptions(selectedOptions.filter(opt => opt !== optionIndex));
-      } else {
-        setSelectedOptions([...selectedOptions, optionIndex]);
-      }
-    } else {
-      setSelectedOptions([parseInt(value)]);
-    }
-  };
-
-  const formatDate = (timestamp) => {
-    return new Date(timestamp * 1000).toLocaleString();
-  };
-
-  const getStatusBadge = () => {
-    if (isExpired) {
-      return <Badge colorScheme="red">Expired</Badge>;
-    }
-    if (poll.hasVoted) {
-      return <Badge colorScheme="green">Voted</Badge>;
-    }
-    if (poll.isCreator) {
-      return <Badge colorScheme="purple">Created by You</Badge>;
-    }
-    return <Badge colorScheme="blue">Active</Badge>;
-  };
 
   // Close poll functionality
   const { config: closeConfig } = usePrepareContractWrite({
@@ -152,28 +61,28 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
     ...closeConfig,
     onMutate: () => {
       toast({
-        title: 'Preparing to Close Poll',
+        title: 'Preparing to Delete Poll',
         description: 'Please confirm the transaction in your wallet.',
         status: 'info',
         duration: null,
-        id: 'closing-poll-prepare',
+        id: 'deleting-poll-prepare',
       });
     },
     onSuccess: () => {
-      toast.close('closing-poll-prepare');
+      toast.close('deleting-poll-prepare');
       toast({
         title: 'Transaction Submitted',
-        description: 'Your poll is being closed. Please wait for confirmation.',
+        description: 'Your poll is being deleted. Please wait for confirmation.',
         status: 'info',
         duration: null,
-        id: 'closing-poll',
+        id: 'deleting-poll',
       });
     },
     onError: (error) => {
-      toast.close('closing-poll-prepare');
+      toast.close('deleting-poll-prepare');
       toast({
         title: 'Error',
-        description: error.message || 'Failed to close poll',
+        description: error.message || 'Failed to delete poll',
         status: 'error',
         duration: 5000,
       });
@@ -183,42 +92,41 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
   const { isLoading: isWaitingClose } = useWaitForTransaction({
     hash: closeData?.hash,
     onSuccess: () => {
-      toast.close('closing-poll');
+      toast.close('deleting-poll');
       toast({
         title: 'Success!',
-        description: 'Your poll has been closed successfully.',
+        description: 'Your poll has been deleted successfully.',
         status: 'success',
         duration: 5000,
       });
-      if (onVote) onVote();
+      onClose();
+      if (onVote) {
+        setTimeout(() => {
+          onVote();
+        }, 2000); // Add a delay before refreshing
+      }
     },
     onError: (error) => {
-      toast.close('closing-poll');
-      if (error.message.includes('could not be found')) {
-        toast({
-          title: 'Transaction Status Unknown',
-          description: 'Your transaction might still be processing. Please wait a moment and check the poll status.',
-          status: 'warning',
-          duration: 10000,
-        });
-        if (onVote) onVote();
-      } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to close poll. Please try again.',
-          status: 'error',
-          duration: 5000,
-        });
-      }
+      toast.close('deleting-poll');
+      toast({
+        title: 'Error',
+        description: 'Failed to delete poll. Please try again.',
+        status: 'error',
+        duration: 5000,
+      });
     },
   });
 
-  const handleClose = () => {
+  const handleDelete = () => {
+    onOpen(); // Open confirmation modal
+  };
+
+  const confirmDelete = () => {
     if (!closePoll) return;
     try {
       closePoll();
     } catch (error) {
-      console.error('Close error:', error);
+      console.error('Delete error:', error);
       toast({
         title: 'Error',
         description: 'Failed to submit transaction. Please try again.',
@@ -226,6 +134,19 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
         duration: 5000,
       });
     }
+  };
+
+  const getStatusBadge = () => {
+    if (isExpired) {
+      return <Badge colorScheme="red">Expired</Badge>;
+    }
+    if (poll.hasVoted) {
+      return <Badge colorScheme="green">Voted</Badge>;
+    }
+    if (poll.isCreator) {
+      return <Badge colorScheme="purple">Created by You</Badge>;
+    }
+    return <Badge colorScheme="blue">Active</Badge>;
   };
 
   return (
@@ -258,7 +179,7 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
                     variant="ghost"
                     size="sm"
                     isLoading={isClosing || isWaitingClose}
-                    onClick={handleClose}
+                    onClick={handleDelete}
                     aria-label="Delete poll"
                   />
                 </Tooltip>
@@ -267,11 +188,11 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
           </HStack>
 
           <HStack fontSize="sm" color="gray.500" spacing={4}>
-            <Tooltip label={formatDate(poll.deadline)}>
+            <Tooltip label={new Date(poll.deadline * 1000).toLocaleString()}>
               <HStack>
                 <TimeIcon />
                 <Text>
-                  {isExpired ? 'Ended' : 'Ends'} {formatDate(poll.deadline)}
+                  {isExpired ? 'Ended' : 'Ends'} {new Date(poll.deadline * 1000).toLocaleString()}
                 </Text>
               </HStack>
             </Tooltip>
@@ -281,142 +202,30 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
             </HStack>
           </HStack>
 
-          {(poll.hasVoted || isExpired || poll.isCreator) ? (
-            <VStack align="stretch" spacing={3}>
-              {poll.options.map((option, index) => (
-                <Box key={index}>
-                  <HStack justify="space-between" mb={1}>
-                    <Text color="gray.700">{option.text}</Text>
-                    <Text color="gray.600" fontSize="sm">
-                      {option.voteCount} votes
-                      {totalVotes > 0 && ` (${((option.voteCount / totalVotes) * 100).toFixed(1)}%)`}
-                    </Text>
-                  </HStack>
-                  <Progress
-                    value={(option.voteCount / (totalVotes || 1)) * 100}
-                    size="sm"
-                    colorScheme="brand"
-                    borderRadius="full"
-                  />
-                </Box>
-              ))}
-            </VStack>
-          ) : (
-            <Stack spacing={3}>
-              {poll.isMultipleChoice ? (
-                poll.options.map((option, index) => (
-                  <Checkbox
-                    key={index}
-                    isChecked={selectedOptions.includes(index)}
-                    onChange={() => handleOptionSelect(index.toString())}
-                    colorScheme="brand"
-                  >
-                    {option.text}
-                  </Checkbox>
-                ))
-              ) : (
-                <RadioGroup
-                  onChange={handleOptionSelect}
-                  value={selectedOptions[0]?.toString()}
-                >
-                  <Stack>
-                    {poll.options.map((option, index) => (
-                      <Radio
-                        key={index}
-                        value={index.toString()}
-                        colorScheme="brand"
-                      >
-                        {option.text}
-                      </Radio>
-                    ))}
-                  </Stack>
-                </RadioGroup>
-              )}
-            </Stack>
-          )}
-
-          {!poll.hasVoted && !isExpired && !poll.isCreator && (
-            <Button
-              colorScheme="brand"
-              onClick={handleVote}
-              isLoading={isVoting}
-              isDisabled={selectedOptions.length === 0}
-              loadingText="Submitting Vote..."
-            >
-              Submit Vote
-            </Button>
-          )}
-
-          {poll.hasVoted && (
-            <Alert status="success" borderRadius="md">
-              <AlertIcon />
-              You have voted in this poll
-            </Alert>
-          )}
-
-          {isExpired && !poll.hasVoted && !poll.isCreator && (
-            <Alert status="warning" borderRadius="md">
-              <AlertIcon />
-              This poll has ended
-            </Alert>
-          )}
-
-          {showVoterDetails && poll.isCreator && (
-            <Button
-              leftIcon={<ViewIcon />}
-              onClick={onOpen}
-              variant="outline"
-              colorScheme="brand"
-            >
-              View Voter Details
-            </Button>
-          )}
+          <VStack align="stretch" spacing={3}>
+            {poll.options.map((option, index) => (
+              <Box key={index}>
+                <HStack justify="space-between" mb={1}>
+                  <Text color="gray.700">{option.text}</Text>
+                  <Text color="gray.600" fontSize="sm">
+                    {option.voteCount} votes
+                    {totalVotes > 0 && ` (${((option.voteCount / totalVotes) * 100).toFixed(1)}%)`}
+                  </Text>
+                </HStack>
+                <Progress
+                  value={(option.voteCount / (totalVotes || 1)) * 100}
+                  size="sm"
+                  colorScheme="brand"
+                  borderRadius="full"
+                />
+              </Box>
+            ))}
+          </VStack>
         </VStack>
       </Box>
 
-      {/* Voter Details Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Voter Details</ModalHeader>
-          <ModalBody>
-            <VStack align="stretch" spacing={4}>
-              <Text fontWeight="bold">
-                Total Votes: {totalVotes}
-              </Text>
-              <Divider />
-              {voterDetails && voterDetails.length > 0 ? (
-                <Table variant="simple">
-                  <Thead>
-                    <Tr>
-                      <Th>Voter Address</Th>
-                      <Th>Option Selected</Th>
-                      <Th>Time</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {voterDetails.map((voter, index) => (
-                      <Tr key={index}>
-                        <Td>{voter.voter}</Td>
-                        <Td>{poll.options[voter.optionIndex].text}</Td>
-                        <Td>{formatDate(voter.timestamp)}</Td>
-                      </Tr>
-                    ))}
-                  </Tbody>
-                </Table>
-              ) : (
-                <Text>No votes recorded yet</Text>
-              )}
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button onClick={onClose}>Close</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Confirmation Modal */}
-      <Modal isOpen={isOpen} onClose={onClose}>
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={isOpen} onClose={onClose} isCentered>
         <ModalOverlay backdropFilter="blur(4px)" />
         <ModalContent>
           <ModalHeader>Delete Poll</ModalHeader>
@@ -429,10 +238,7 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
             </Button>
             <Button
               colorScheme="red"
-              onClick={() => {
-                handleClose();
-                onClose();
-              }}
+              onClick={confirmDelete}
               isLoading={isClosing || isWaitingClose}
             >
               Delete
