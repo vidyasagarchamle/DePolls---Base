@@ -1,6 +1,10 @@
 import { extendTheme } from '@chakra-ui/react';
 
 const theme = extendTheme({
+  config: {
+    initialColorMode: 'light',
+    useSystemColorMode: false,
+  },
   fonts: {
     heading: "'Outfit', sans-serif",
     body: "'Outfit', sans-serif",
@@ -13,6 +17,7 @@ const theme = extendTheme({
           ? 'radial-gradient(circle at 1px 1px, #2D3748 1px, transparent 0)' 
           : 'radial-gradient(circle at 1px 1px, #E2E8F0 1px, transparent 0)',
         backgroundSize: '40px 40px',
+        transition: 'all 0.2s ease-in-out',
       },
     }),
   },
@@ -31,6 +36,21 @@ const theme = extendTheme({
     },
   },
   components: {
+    Box: {
+      baseStyle: {
+        transition: 'all 0.2s ease-in-out',
+      },
+    },
+    Text: {
+      baseStyle: {
+        transition: 'color 0.2s ease-in-out',
+      },
+    },
+    Heading: {
+      baseStyle: {
+        transition: 'color 0.2s ease-in-out',
+      },
+    },
     Button: {
       defaultProps: {
         colorScheme: 'brand',
@@ -92,6 +112,11 @@ const theme = extendTheme({
           },
         },
       },
+      baseStyle: {
+        container: {
+          transition: 'all 0.2s ease-in-out',
+        },
+      },
     },
     Modal: {
       baseStyle: {
@@ -103,6 +128,7 @@ const theme = extendTheme({
           bg: 'white',
           borderRadius: 'xl',
           boxShadow: 'xl',
+          transition: 'all 0.2s ease-in-out',
         },
       },
     },
