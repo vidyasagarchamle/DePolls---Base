@@ -19,6 +19,7 @@ import {
   Switch,
   useToast,
   useColorModeValue,
+  Select,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon } from '@chakra-ui/icons';
 import { useAccount, useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
@@ -31,6 +32,7 @@ const CreatePoll = ({ onPollCreated }) => {
   const [options, setOptions] = useState(['', '']);
   const [isMultipleChoice, setIsMultipleChoice] = useState(false);
   const [isWeighted, setIsWeighted] = useState(false);
+  const [duration, setDuration] = useState('7'); // Default 7 days
   const toast = useToast();
 
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -38,8 +40,8 @@ const CreatePoll = ({ onPollCreated }) => {
   const mutedTextColor = useColorModeValue('gray.600', 'gray.300');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
 
-  // 7 days from now in seconds
-  const deadline = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
+  // Calculate deadline based on selected duration
+  const deadline = Math.floor(Date.now() / 1000) + (parseInt(duration) * 24 * 60 * 60);
 
   // Filter out empty options
   const validOptions = options.map(opt => opt.trim()).filter(opt => opt !== '');
@@ -52,7 +54,7 @@ const CreatePoll = ({ onPollCreated }) => {
     enabled: question.trim() !== '' && validOptions.length >= 2,
   });
 
-  const { write: createPoll, data } = useContractWrite({
+  const { write: createPoll, data, isLoading: isWriteLoading } = useContractWrite({
     ...config,
     onSuccess: () => {
       toast({
@@ -68,7 +70,7 @@ const CreatePoll = ({ onPollCreated }) => {
     },
   });
 
-  const { isLoading } = useWaitForTransaction({
+  const { isLoading: isWaitLoading } = useWaitForTransaction({
     hash: data?.hash,
     onSuccess: () => {
       toast.close('creating-poll');
@@ -97,11 +99,14 @@ const CreatePoll = ({ onPollCreated }) => {
     },
   });
 
+  const isLoading = isWriteLoading || isWaitLoading;
+
   const resetForm = () => {
     setQuestion('');
     setOptions(['', '']);
     setIsMultipleChoice(false);
     setIsWeighted(false);
+    setDuration('7');
     onClose();
   };
 
@@ -124,7 +129,7 @@ const CreatePoll = ({ onPollCreated }) => {
   };
 
   const handleSubmit = () => {
-    if (!createPoll) return;
+    if (!createPoll || isLoading) return;
     if (question.trim() === '') {
       toast({
         title: 'Error',
@@ -182,7 +187,7 @@ const CreatePoll = ({ onPollCreated }) => {
       <Text color={mutedTextColor} mb={4}>
         Create a new poll and let the community vote
       </Text>
-      <Button onClick={onOpen}>Create Poll</Button>
+      <Button onClick={onOpen} isDisabled={isLoading}>Create Poll</Button>
 
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay backdropFilter="blur(4px)" />
@@ -199,6 +204,7 @@ const CreatePoll = ({ onPollCreated }) => {
                   onChange={(e) => setQuestion(e.target.value)}
                   bg={bgColor}
                   color={textColor}
+                  isDisabled={isLoading}
                 />
               </FormControl>
 
@@ -213,6 +219,7 @@ const CreatePoll = ({ onPollCreated }) => {
                         onChange={(e) => updateOption(index, e.target.value)}
                         bg={bgColor}
                         color={textColor}
+                        isDisabled={isLoading}
                       />
                       {options.length > 2 && (
                         <IconButton
@@ -221,6 +228,7 @@ const CreatePoll = ({ onPollCreated }) => {
                           variant="ghost"
                           colorScheme="red"
                           aria-label="Remove option"
+                          isDisabled={isLoading}
                         />
                       )}
                     </HStack>
@@ -232,11 +240,29 @@ const CreatePoll = ({ onPollCreated }) => {
                       size="sm"
                       variant="ghost"
                       width="full"
+                      isDisabled={isLoading}
                     >
                       Add Option
                     </Button>
                   )}
                 </VStack>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel color={textColor}>Poll Duration</FormLabel>
+                <Select
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  bg={bgColor}
+                  color={textColor}
+                  isDisabled={isLoading}
+                >
+                  <option value="1">1 day</option>
+                  <option value="3">3 days</option>
+                  <option value="7">7 days</option>
+                  <option value="14">14 days</option>
+                  <option value="30">30 days</option>
+                </Select>
               </FormControl>
 
               <FormControl display="flex" alignItems="center">
@@ -245,6 +271,7 @@ const CreatePoll = ({ onPollCreated }) => {
                   colorScheme="brand"
                   isChecked={isMultipleChoice}
                   onChange={(e) => setIsMultipleChoice(e.target.checked)}
+                  isDisabled={isLoading}
                 />
               </FormControl>
 
@@ -254,6 +281,7 @@ const CreatePoll = ({ onPollCreated }) => {
                   colorScheme="brand"
                   isChecked={isWeighted}
                   onChange={(e) => setIsWeighted(e.target.checked)}
+                  isDisabled={isLoading}
                 />
               </FormControl>
 
@@ -262,6 +290,7 @@ const CreatePoll = ({ onPollCreated }) => {
                 onClick={handleSubmit}
                 isLoading={isLoading}
                 loadingText="Creating Poll..."
+                isDisabled={isLoading || !question.trim() || validOptions.length < 2}
               >
                 Create Poll
               </Button>

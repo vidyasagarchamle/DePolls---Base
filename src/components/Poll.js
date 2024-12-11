@@ -70,14 +70,6 @@ const Poll = ({ poll, onVote }) => {
         id: 'voting',
       });
     },
-    onError: (error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to submit vote',
-        status: 'error',
-        duration: 5000,
-      });
-    },
   });
 
   const { isLoading: isWaitingVote } = useWaitForTransaction({
@@ -92,8 +84,9 @@ const Poll = ({ poll, onVote }) => {
       });
       if (onVote) {
         onVote();
-        setTimeout(onVote, 2000);
-        setTimeout(onVote, 5000);
+        setTimeout(() => onVote(), 1000);
+        setTimeout(() => onVote(), 3000);
+        setTimeout(() => onVote(), 5000);
       }
     },
     onError: (error) => {
@@ -107,6 +100,8 @@ const Poll = ({ poll, onVote }) => {
       if (onVote) onVote();
     },
   });
+
+  const isVoteLoading = isVoting || isWaitingVote;
 
   // Close poll functionality
   const { config: closeConfig } = usePrepareContractWrite({
@@ -128,14 +123,6 @@ const Poll = ({ poll, onVote }) => {
         id: 'deleting-poll',
       });
     },
-    onError: (error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete poll',
-        status: 'error',
-        duration: 5000,
-      });
-    },
   });
 
   const { isLoading: isWaitingClose } = useWaitForTransaction({
@@ -151,8 +138,9 @@ const Poll = ({ poll, onVote }) => {
       onClose();
       if (onVote) {
         onVote();
-        setTimeout(onVote, 2000);
-        setTimeout(onVote, 5000);
+        setTimeout(() => onVote(), 1000);
+        setTimeout(() => onVote(), 3000);
+        setTimeout(() => onVote(), 5000);
       }
     },
     onError: (error) => {
@@ -165,6 +153,9 @@ const Poll = ({ poll, onVote }) => {
       });
     },
   });
+
+  const isCloseLoading = isClosing || isWaitingClose;
+  const isAnyTransactionPending = isVoteLoading || isCloseLoading;
 
   const handleDelete = () => {
     onOpen();
@@ -251,7 +242,7 @@ const Poll = ({ poll, onVote }) => {
       position="relative"
       transition="all 0.2s"
       _hover={{
-        transform: 'translateY(-2px)',
+        transform: isAnyTransactionPending ? 'none' : 'translateY(-2px)',
         shadow: 'md',
         borderColor: 'brand.500',
       }}
@@ -304,11 +295,12 @@ const Poll = ({ poll, onVote }) => {
                     />
                   </VStack>
                 ) : (
-                  <Box onClick={() => handleOptionSelect(index)} cursor="pointer">
+                  <Box onClick={() => !isAnyTransactionPending && handleOptionSelect(index)} cursor={isAnyTransactionPending ? 'not-allowed' : 'pointer'}>
                     {poll.isMultipleChoice ? (
                       <Checkbox
                         isChecked={selectedOptions.includes(index)}
                         colorScheme="brand"
+                        isDisabled={isAnyTransactionPending}
                       >
                         <Text color={textColor}>{option.text}</Text>
                       </Checkbox>
@@ -316,6 +308,7 @@ const Poll = ({ poll, onVote }) => {
                       <Radio
                         isChecked={selectedOptions.includes(index)}
                         colorScheme="brand"
+                        isDisabled={isAnyTransactionPending}
                       >
                         <Text color={textColor}>{option.text}</Text>
                       </Radio>
@@ -330,9 +323,10 @@ const Poll = ({ poll, onVote }) => {
         {!poll.hasVoted && !isExpired && !poll.isCreator && (
           <Button
             onClick={handleVote}
-            isLoading={isVoting || isWaitingVote}
+            isLoading={isVoteLoading}
             loadingText="Submitting Vote..."
             width="full"
+            isDisabled={isAnyTransactionPending || selectedOptions.length === 0}
           >
             Submit Vote
           </Button>
@@ -345,8 +339,9 @@ const Poll = ({ poll, onVote }) => {
             colorScheme="red"
             variant="ghost"
             size="sm"
-            isLoading={isClosing || isWaitingClose}
+            isLoading={isCloseLoading}
             loadingText="Deleting..."
+            isDisabled={isAnyTransactionPending}
           >
             Delete Poll
           </Button>
@@ -360,7 +355,7 @@ const Poll = ({ poll, onVote }) => {
         )}
       </VStack>
 
-      <Modal isOpen={isOpen} onClose={onClose}>
+      <Modal isOpen={isOpen} onClose={onClose} closeOnOverlayClick={!isCloseLoading}>
         <ModalOverlay backdropFilter="blur(4px)" />
         <ModalContent bg={bgColor}>
           <ModalHeader color={textColor}>Delete Poll</ModalHeader>
@@ -370,10 +365,16 @@ const Poll = ({ poll, onVote }) => {
             </Text>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onClose}>
+            <Button variant="ghost" mr={3} onClick={onClose} isDisabled={isCloseLoading}>
               Cancel
             </Button>
-            <Button colorScheme="red" onClick={confirmDelete} isLoading={isClosing || isWaitingClose}>
+            <Button
+              colorScheme="red"
+              onClick={confirmDelete}
+              isLoading={isCloseLoading}
+              loadingText="Deleting..."
+              isDisabled={isAnyTransactionPending}
+            >
               Delete
             </Button>
           </ModalFooter>
