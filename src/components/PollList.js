@@ -19,6 +19,7 @@ import {
   TabPanel,
   useColorModeValue,
   Divider,
+  Box,
 } from '@chakra-ui/react';
 import { useContractRead, useAccount } from 'wagmi';
 import { ethers } from 'ethers';
@@ -268,22 +269,16 @@ function PollList() {
                   textAlign="center"
                   height="200px"
                   borderRadius="xl"
+                  bg={useColorModeValue('white', 'gray.800')}
                 >
                   <AlertIcon boxSize="40px" mb={4} />
-                  <Heading size="md" mb={2}>No Active Polls</Heading>
-                  <Text>There are no active polls to vote on at the moment.</Text>
+                  <Heading size="md" mb={2} color={useColorModeValue('gray.800', 'white')}>No Active Polls</Heading>
+                  <Text color={useColorModeValue('gray.600', 'gray.300')}>There are no active polls at the moment. Create one!</Text>
                 </Alert>
               ) : (
-                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                  {activePolls.map((poll) => (
-                    <Poll 
-                      key={poll.id} 
-                      poll={poll} 
-                      onVote={handlePollUpdate}
-                      showVoterDetails={false}
-                    />
-                  ))}
-                </SimpleGrid>
+                activePolls.map(poll => (
+                  <Poll key={poll.id} poll={poll} onVote={handlePollUpdate} />
+                ))
               )}
             </VStack>
           </TabPanel>
@@ -301,48 +296,35 @@ function PollList() {
                   textAlign="center"
                   height="200px"
                   borderRadius="xl"
+                  bg={useColorModeValue('white', 'gray.800')}
                 >
                   <AlertIcon boxSize="40px" mb={4} />
-                  <Heading size="md" mb={2}>No Created Polls</Heading>
-                  <Text>You haven't created any polls yet. Create one to get started!</Text>
+                  <Heading size="md" mb={2} color={useColorModeValue('gray.800', 'white')}>No Polls Created</Heading>
+                  <Text color={useColorModeValue('gray.600', 'gray.300')}>You haven't created any polls yet.</Text>
                 </Alert>
               ) : (
-                <VStack spacing={8} align="stretch">
-                  {/* Active Polls Section */}
+                <>
                   {activeMyPolls.length > 0 && (
-                    <>
-                      <Heading size="md" color="gray.700">Active Polls</Heading>
-                      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                        {activeMyPolls.map((poll) => (
-                          <Poll 
-                            key={poll.id} 
-                            poll={poll} 
-                            onVote={handlePollUpdate}
-                            showVoterDetails={true}
-                          />
+                    <Box>
+                      <Heading size="md" mb={4} color={useColorModeValue('gray.800', 'white')}>Active</Heading>
+                      <VStack spacing={4} align="stretch">
+                        {activeMyPolls.map(poll => (
+                          <Poll key={poll.id} poll={poll} onVote={handlePollUpdate} />
                         ))}
-                      </SimpleGrid>
-                    </>
+                      </VStack>
+                    </Box>
                   )}
-
-                  {/* Closed Polls Section */}
                   {closedMyPolls.length > 0 && (
-                    <>
-                      <Divider my={4} />
-                      <Heading size="md" color="gray.700">Closed Polls</Heading>
-                      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                        {closedMyPolls.map((poll) => (
-                          <Poll 
-                            key={poll.id} 
-                            poll={poll} 
-                            onVote={handlePollUpdate}
-                            showVoterDetails={true}
-                          />
+                    <Box>
+                      <Heading size="md" mb={4} color={useColorModeValue('gray.800', 'white')}>Closed</Heading>
+                      <VStack spacing={4} align="stretch">
+                        {closedMyPolls.map(poll => (
+                          <Poll key={poll.id} poll={poll} onVote={handlePollUpdate} />
                         ))}
-                      </SimpleGrid>
-                    </>
+                      </VStack>
+                    </Box>
                   )}
-                </VStack>
+                </>
               )}
             </VStack>
           </TabPanel>

@@ -127,6 +127,10 @@ function App() {
           '--w3m-background-color': colorMode === 'dark' ? '#1a202c' : '#ffffff',
           '--w3m-container-border-radius': '16px',
         }}
+        mobileWalletConfig={{
+          autoConnect: true,
+          removeQrCodeAfterConnect: true,
+        }}
       />
     </>
   );
