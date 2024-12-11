@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#0066ff" />
+      <stop offset="100%" style="stop-color:#7c3aed" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="128" fill="white"/>
+  
+  <!-- Main ballot box shape -->
+  <rect x="128" y="128" width="256" height="256" rx="32" 
+    stroke="url(#gradient)" stroke-width="24" fill="none"/>
+  
+  <!-- Checkmark -->
+  <path d="M160 256L224 320L352 192" 
+    stroke="url(#gradient)" 
+    stroke-width="24" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+    fill="none"/>
+</svg> 
