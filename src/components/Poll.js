@@ -177,27 +177,39 @@ const Poll = ({ poll, onVote }) => {
   };
 
   const handleVote = () => {
-    if (!vote) return;
+    if (!vote || isVoteLoading) return;
     if (selectedOptions.length === 0) {
       toast({
         title: 'Select Option',
-        description: 'Please select at least one option to vote.',
+        description: poll.isMultipleChoice ? 'Please select at least one option to vote.' : 'Please select an option to vote.',
         status: 'warning',
         duration: 5000,
       });
       return;
     }
-    vote();
+    try {
+      vote();
+    } catch (error) {
+      console.error('Vote error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to submit vote. Please try again.',
+        status: 'error',
+        duration: 5000,
+      });
+    }
   };
 
   const handleOptionSelect = (index) => {
     if (poll.isMultipleChoice) {
-      const optionIndex = parseInt(index);
-      if (selectedOptions.includes(optionIndex)) {
-        setSelectedOptions(selectedOptions.filter(opt => opt !== optionIndex));
-      } else {
-        setSelectedOptions([...selectedOptions, optionIndex]);
-      }
+      setSelectedOptions(prev => {
+        const optionIndex = parseInt(index);
+        if (prev.includes(optionIndex)) {
+          return prev.filter(opt => opt !== optionIndex);
+        } else {
+          return [...prev, optionIndex];
+        }
+      });
     } else {
       setSelectedOptions([parseInt(index)]);
     }
@@ -295,12 +307,18 @@ const Poll = ({ poll, onVote }) => {
                     />
                   </VStack>
                 ) : (
-                  <Box onClick={() => !isAnyTransactionPending && handleOptionSelect(index)} cursor={isAnyTransactionPending ? 'not-allowed' : 'pointer'}>
+                  <Box 
+                    onClick={() => !isAnyTransactionPending && handleOptionSelect(index)}
+                    cursor={isAnyTransactionPending ? 'not-allowed' : 'pointer'}
+                    width="100%"
+                  >
                     {poll.isMultipleChoice ? (
                       <Checkbox
                         isChecked={selectedOptions.includes(index)}
                         colorScheme="brand"
                         isDisabled={isAnyTransactionPending}
+                        onChange={() => !isAnyTransactionPending && handleOptionSelect(index)}
+                        width="100%"
                       >
                         <Text color={textColor}>{option.text}</Text>
                       </Checkbox>
@@ -309,6 +327,8 @@ const Poll = ({ poll, onVote }) => {
                         isChecked={selectedOptions.includes(index)}
                         colorScheme="brand"
                         isDisabled={isAnyTransactionPending}
+                        onChange={() => !isAnyTransactionPending && handleOptionSelect(index)}
+                        width="100%"
                       >
                         <Text color={textColor}>{option.text}</Text>
                       </Radio>

@@ -59,7 +59,7 @@ const CreatePoll = ({ onPollCreated }) => {
     onSuccess: () => {
       toast({
         title: 'Transaction Submitted',
-        description: 'Your poll is being created.',
+        description: `Your ${isMultipleChoice ? 'multiple choice ' : ''}poll is being created.`,
         status: 'info',
         duration: null,
         id: 'creating-poll',
@@ -272,6 +272,7 @@ const CreatePoll = ({ onPollCreated }) => {
                   isChecked={isMultipleChoice}
                   onChange={(e) => setIsMultipleChoice(e.target.checked)}
                   isDisabled={isLoading}
+                  size="lg"
                 />
               </FormControl>
 
