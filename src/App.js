@@ -21,14 +21,23 @@ const chains = [baseSepolia];
 
 const { publicClient, webSocketPublicClient } = configureChains(
   chains,
-  [w3mProvider({ projectId }), publicProvider()]
+  [
+    w3mProvider({ projectId }),
+    publicProvider()
+  ],
+  {
+    pollingInterval: 5000,
+    stallTimeout: 5000,
+    retryCount: 3,
+  }
 );
 
 const wagmiConfig = createConfig({
   autoConnect: true,
   connectors: w3mConnectors({ projectId, version: '2', chains }),
   publicClient,
-  webSocketPublicClient
+  webSocketPublicClient,
+  syncConnectedChain: true,
 });
 
 const ethereumClient = new EthereumClient(wagmiConfig, chains);

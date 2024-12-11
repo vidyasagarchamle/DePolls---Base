@@ -105,42 +105,18 @@ function PollList() {
       const count = safeToNumber(pollCount);
       console.log('Total poll count:', count);
 
-      // Fetch the latest poll first
-      const latestPollId = count - 1;
-      if (latestPollId >= 0) {
-        const latestPoll = await fetchPoll(latestPollId, contract);
-        if (latestPoll) {
-          setPolls(prevPolls => {
-            // Add the new poll if it doesn't exist
-            const exists = prevPolls.some(p => p.id === latestPoll.id);
-            if (!exists) {
-              return [...prevPolls, latestPoll];
-            }
-            return prevPolls;
-          });
-        }
-      }
-
-      // Then fetch all other polls
+      // Fetch all polls in parallel
       const pollPromises = [];
-      for (let i = 0; i < count - 1; i++) {
+      for (let i = 0; i < count; i++) {
         pollPromises.push(fetchPoll(i, contract));
       }
 
       const fetchedPolls = (await Promise.all(pollPromises))
-        .filter(poll => poll !== null);
+        .filter(poll => poll !== null)
+        .sort((a, b) => b.id - a.id); // Sort by ID in descending order
 
-      setPolls(prevPolls => {
-        // Merge new polls with existing ones, avoiding duplicates
-        const newPolls = [...prevPolls];
-        fetchedPolls.forEach(poll => {
-          const exists = newPolls.some(p => p.id === poll.id);
-          if (!exists) {
-            newPolls.push(poll);
-          }
-        });
-        return newPolls;
-      });
+      setPolls(fetchedPolls);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching polls:', error);
       toast({
@@ -150,7 +126,6 @@ function PollList() {
         duration: 5000,
         isClosable: true,
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -169,22 +144,16 @@ function PollList() {
       return;
     }
 
-    const fetchAndUpdate = async () => {
-      await fetchPolls();
-    };
-
-    fetchAndUpdate();
+    fetchPolls();
 
     // Set up polling interval for updates
-    const intervalId = setInterval(fetchAndUpdate, 5000); // Poll every 5 seconds
+    const intervalId = setInterval(fetchPolls, 10000); // Poll every 10 seconds
 
     return () => clearInterval(intervalId); // Cleanup on unmount
   }, [address, pollCount, isPollCountError]);
 
   // Handler for poll updates
   const handlePollUpdate = async () => {
-    // Wait for a short delay to allow the blockchain to update
-    await new Promise(resolve => setTimeout(resolve, 2000));
     await fetchPolls();
   };
 

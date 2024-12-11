@@ -62,6 +62,9 @@ const CreatePoll = ({ onPollCreated }) => {
         duration: null,
         id: 'creating-poll',
       });
+      if (onPollCreated) {
+        onPollCreated();
+      }
     },
   });
 
@@ -78,8 +81,9 @@ const CreatePoll = ({ onPollCreated }) => {
       resetForm();
       if (onPollCreated) {
         onPollCreated();
-        // Call again after a delay to ensure we catch the update
-        setTimeout(onPollCreated, 2000);
+        setTimeout(() => onPollCreated(), 1000);
+        setTimeout(() => onPollCreated(), 3000);
+        setTimeout(() => onPollCreated(), 5000);
       }
     },
     onError: () => {
