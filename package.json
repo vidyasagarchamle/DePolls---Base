@@ -10,7 +10,8 @@
     "eject": "react-scripts eject",
     "node": "hardhat node",
     "deploy-local": "hardhat run scripts/deploy.js --network localhost",
-    "compile": "hardhat compile"
+    "compile": "hardhat compile",
+    "vercel-build": "npm run build"
   },
   "keywords": [],
   "author": "",

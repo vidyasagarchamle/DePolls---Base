@@ -64,7 +64,6 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
         duration: null,
         id: 'voting',
       });
-      if (onVote) onVote();
     },
     onError: (error) => {
       toast({
@@ -87,9 +86,9 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
         duration: 5000,
       });
       if (onVote) {
-        setTimeout(() => {
-          onVote();
-        }, 1000);
+        onVote();
+        setTimeout(onVote, 2000);
+        setTimeout(onVote, 5000);
       }
     },
     onError: (error) => {
@@ -157,9 +156,9 @@ const Poll = ({ poll, onVote, showVoterDetails = false }) => {
       });
       onClose();
       if (onVote) {
-        setTimeout(() => {
-          onVote();
-        }, 2000);
+        onVote();
+        setTimeout(onVote, 2000);
+        setTimeout(onVote, 5000);
       }
     },
     onError: (error) => {

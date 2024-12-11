@@ -168,12 +168,23 @@ function PollList() {
       return;
     }
 
-    fetchPolls();
+    const fetchAndUpdate = async () => {
+      await fetchPolls();
+    };
+
+    fetchAndUpdate();
+
+    // Set up polling interval for updates
+    const intervalId = setInterval(fetchAndUpdate, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(intervalId); // Cleanup on unmount
   }, [address, pollCount, isPollCountError]);
 
   // Handler for poll updates
-  const handlePollUpdate = () => {
-    fetchPolls();
+  const handlePollUpdate = async () => {
+    // Wait for a short delay to allow the blockchain to update
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    await fetchPolls();
   };
 
   // Render loading state

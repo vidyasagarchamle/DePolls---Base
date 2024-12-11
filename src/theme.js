@@ -1,17 +1,20 @@
 import { extendTheme } from '@chakra-ui/react';
 
 const theme = extendTheme({
-  config: {
-    initialColorMode: 'light',
-    useSystemColorMode: false,
+  fonts: {
+    heading: "'Outfit', sans-serif",
+    body: "'Outfit', sans-serif",
   },
   styles: {
-    global: {
+    global: (props) => ({
       body: {
-        bg: 'gray.50',
-        color: 'gray.800',
+        bg: props.colorMode === 'dark' ? 'gray.900' : 'gray.50',
+        backgroundImage: props.colorMode === 'dark' 
+          ? 'radial-gradient(circle at 1px 1px, #2D3748 1px, transparent 0)' 
+          : 'radial-gradient(circle at 1px 1px, #E2E8F0 1px, transparent 0)',
+        backgroundSize: '40px 40px',
       },
-    },
+    }),
   },
   colors: {
     brand: {
@@ -52,6 +55,12 @@ const theme = extendTheme({
           },
         },
       },
+      baseStyle: {
+        _hover: {
+          transform: 'translateY(-2px)',
+          transition: 'all 0.2s',
+        },
+      },
     },
     Card: {
       baseStyle: {
@@ -64,10 +73,11 @@ const theme = extendTheme({
           p: 6,
           _hover: {
             borderColor: 'brand.500',
-            transform: 'translateY(-2px)',
+            transform: 'translateY(-4px)',
             boxShadow: 'md',
             transition: 'all 0.2s',
           },
+          transition: 'all 0.2s',
         },
       },
     },
