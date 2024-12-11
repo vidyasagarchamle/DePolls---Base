@@ -24,15 +24,15 @@ const Logo = ({ width = "150px", height = "40px" }) => {
           </linearGradient>
         </defs>
         
-        {/* Main Logo Shape - "D" with voting checkmark */}
+        {/* Main Logo Shape - Abstract ballot box with checkmark */}
         <path
-          d="M20 5h15c5.523 0 10 4.477 10 10s-4.477 10-10 10H20V5z"
+          d="M15 8h20c1.105 0 2 .895 2 2v20c0 1.105-.895 2-2 2H15c-1.105 0-2-.895-2-2V10c0-1.105.895-2 2-2z"
           stroke={`url(#${gradientId})`}
-          strokeWidth="2.5"
+          strokeWidth="2"
           fill="none"
         />
         <path
-          d="M28 15l4 4 6-6"
+          d="M13 15l8 8L33 11"
           stroke={`url(#${gradientId})`}
           strokeWidth="2.5"
           strokeLinecap="round"
@@ -40,22 +40,25 @@ const Logo = ({ width = "150px", height = "40px" }) => {
           fill="none"
         />
         
-        {/* Text "ePolls" */}
+        {/* Text "DePolls" with custom styling */}
         <text
-          x="50"
-          y="25"
+          x="45"
+          y="27"
           fontFamily="Outfit"
           fontSize="24"
           fontWeight="600"
+          letterSpacing="-0.5"
           fill={`url(#${gradientId})`}
         >
-          ePolls
+          DePolls
         </text>
         
-        {/* Decorative dots representing voting/polling */}
-        <circle cx="140" cy="10" r="2" fill={`url(#${gradientId})`} />
-        <circle cx="140" cy="20" r="2" fill={`url(#${gradientId})`} />
-        <circle cx="140" cy="30" r="2" fill={`url(#${gradientId})`} />
+        {/* Decorative elements */}
+        <g opacity="0.6">
+          <circle cx="140" cy="12" r="2" fill={`url(#${gradientId})`} />
+          <circle cx="140" cy="20" r="2" fill={`url(#${gradientId})`} />
+          <circle cx="140" cy="28" r="2" fill={`url(#${gradientId})`} />
+        </g>
       </svg>
     </Box>
   );
