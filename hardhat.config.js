@@ -14,14 +14,28 @@ module.exports = {
     }
   },
   networks: {
-    sepolia: {
-      url: process.env.SEPOLIA_URL,
+    baseSepolia: {
+      url: "https://base-sepolia.g.alchemy.com/v2/vxqTAvJTZnIZ-ACvb-tLBHKMDlArJiev",
       accounts: [process.env.PRIVATE_KEY],
-      chainId: 11155111
+      chainId: 84532,
+      gasPrice: 1000000000,
+      timeout: 60000
     }
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY
+    apiKey: {
+      baseSepolia: process.env.BASESCAN_API_KEY
+    },
+    customChains: [
+      {
+        network: "baseSepolia",
+        chainId: 84532,
+        urls: {
+          apiURL: "https://api-sepolia.basescan.org/api",
+          browserURL: "https://sepolia.basescan.org"
+        }
+      }
+    ]
   },
   paths: {
     artifacts: "./src/artifacts",

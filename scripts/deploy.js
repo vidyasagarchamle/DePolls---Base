@@ -5,14 +5,14 @@ async function main() {
   console.log("Deploying contracts with the account:", deployer.address);
 
   // Deploy DePollsToken
-  const DePollsToken = await hre.ethers.getContractFactory("DePollsToken");
+  const DePollsToken = await hre.ethers.getContractFactory("contracts/DePollsToken.sol:DePollsToken");
   const token = await DePollsToken.deploy();
   await token.deployed();
   const tokenAddress = token.address;
   console.log("DePollsToken deployed to:", tokenAddress);
 
   // Deploy DePolls with token address
-  const DePolls = await hre.ethers.getContractFactory("DePolls");
+  const DePolls = await hre.ethers.getContractFactory("contracts/DePolls.sol:DePolls");
   const polls = await DePolls.deploy(tokenAddress);
   await polls.deployed();
   const pollsAddress = polls.address;

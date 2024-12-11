@@ -1,6 +1,6 @@
 # DePolls - Web3 Native Polling Platform
 
-DePolls is a decentralized polling platform built on Ethereum that allows users to create, vote on, and manage polls in a transparent and secure manner.
+DePolls is a decentralized polling platform built on Base that allows users to create, vote on, and manage polls in a transparent and secure manner.
 
 ## Features
 
@@ -12,76 +12,80 @@ DePolls is a decentralized polling platform built on Ethereum that allows users 
 - Responsive design for all devices
 - Instant transaction feedback with optimistic updates
 
+## Deployed Contracts (Base Sepolia)
+
+- DePollsToken: `0x9be87fdCf8dC946683702192Ebd4f1924a96B18B`
+- DePolls: `0x41395582EDE920Dcef10fea984c9A0459885E8eB`
+
 ## Architecture
 
 ### Smart Contracts
-- Built with Solidity and deployed on Ethereum
+- Built with Solidity and deployed on Base
 - Uses OpenZeppelin for secure token and access control implementation
 - Main contracts:
   - `DePollsToken.sol`: ERC20 token for rewards
-  - `DePollsManager.sol`: Core polling logic and management
-  - `DePollsFactory.sol`: Poll creation and lifecycle management
+  - `DePolls.sol`: Core polling logic and management
 
 ### Frontend
-- React.js with Next.js framework
-- Chakra UI for modern, accessible components
+- React.js with Chakra UI
 - Web3 Integration:
   - WalletConnect for wallet connectivity
   - wagmi hooks for contract interactions
   - Alchemy SDK for blockchain data
-- State Management:
-  - React Context for global state
-  - SWR for data fetching and caching
-
-### Data Flow
-1. Poll Creation:
-   - User creates poll through frontend interface
-   - Transaction sent to DePollsFactory contract
-   - Poll data stored on-chain with options and settings
-   - UI updates optimistically while transaction confirms
-
-2. Voting Process:
-   - Users connect wallet to participate
-   - Votes recorded on-chain through smart contract
-   - Real-time UI updates with transaction feedback
-   - Rewards distributed automatically post-vote
-
-3. Poll Management:
-   - Active polls fetched from blockchain
-   - Creator can close polls when voting period ends
-   - Results permanently stored on-chain
-   - UI filters and displays based on poll status
-
-## Recent Updates
-
-- Improved transaction handling with better feedback
-- Added optimistic updates for instant UI response
-- Enhanced poll card design with animated progress bars
-- Implemented new reward distribution mechanism
-- Added custom logos for platform and token
-- Fixed vote recording synchronization
-- Improved error handling and user feedback
-- Enhanced mobile responsiveness
 
 ## Setup and Development
 
-1. Clone the repository
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/depolls.git
+   cd depolls
+   ```
+
 2. Install dependencies:
    ```bash
-   cd depolls
    npm install
    ```
 
 3. Configure environment variables:
+   Create a `.env` file with the following:
    ```
-   NEXT_PUBLIC_ALCHEMY_API_KEY=your_key
-   NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=your_id
+   REACT_APP_WALLET_CONNECT_PROJECT_ID=your_wallet_connect_project_id
+   PRIVATE_KEY=your_private_key_for_deployment
+   BASESCAN_API_KEY=your_basescan_api_key
    ```
 
 4. Run development server:
    ```bash
-   npm run dev
+   npm start
    ```
+
+## Network Information
+
+The application is deployed on Base Sepolia testnet. To interact with the dApp:
+
+1. Add Base Sepolia to your MetaMask:
+   - Network Name: Base Sepolia
+   - RPC URL: https://sepolia.base.org
+   - Chain ID: 84532
+   - Currency Symbol: ETH
+   - Block Explorer: https://sepolia.basescan.org
+
+2. Get Base Sepolia ETH from:
+   - [Base Sepolia Faucet](https://www.coinbase.com/faucets/base-sepolia-faucet)
+
+## Testing
+
+Run the test suite:
+```bash
+npm test
+```
+
+## Deployment
+
+To deploy to Base Sepolia:
+```bash
+npx hardhat run scripts/deploy.js --network baseSepolia
+```
 
 ## Contributing
 

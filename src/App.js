@@ -3,7 +3,7 @@ import { ChakraProvider, Box, Container, VStack, useColorMode } from '@chakra-ui
 import { EthereumClient, w3mConnectors, w3mProvider } from '@web3modal/ethereum';
 import { Web3Modal } from '@web3modal/react';
 import { configureChains, createConfig, WagmiConfig } from 'wagmi';
-import { sepolia } from 'wagmi/chains';
+import { baseSepolia } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
 import Navbar from './components/Navbar';
 import PollList from './components/PollList';
@@ -11,7 +11,7 @@ import theme from './theme';
 
 // Hardcode the project ID for now
 const projectId = "ad702a29a086d332c88ecdd4c8dcd51c";
-const chains = [sepolia];
+const chains = [baseSepolia];
 
 const { publicClient, webSocketPublicClient } = configureChains(
   chains,
@@ -54,7 +54,7 @@ function App() {
       <Web3Modal
         projectId={projectId}
         ethereumClient={ethereumClient}
-        defaultChain={sepolia}
+        defaultChain={baseSepolia}
         themeMode="dark"
         themeVariables={{
           '--w3m-font-family': 'inherit',
