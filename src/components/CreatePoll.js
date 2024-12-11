@@ -1,337 +1,112 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
+  Box,
   Button,
-  FormControl,
-  FormLabel,
-  Input,
-  VStack,
-  HStack,
-  IconButton,
-  useToast,
-  Switch,
   Text,
-  Card,
-  CardHeader,
-  CardBody,
-  Heading,
-  Collapse,
   useDisclosure,
-  Tooltip,
   Modal,
   ModalOverlay,
   ModalContent,
   ModalHeader,
   ModalBody,
-  ModalFooter,
-  Progress,
-  Box,
+  ModalCloseButton,
+  FormControl,
+  FormLabel,
+  Input,
+  VStack,
+  Switch,
+  useToast,
+  useColorModeValue,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon, ChevronDownIcon, ChevronUpIcon } from '@chakra-ui/icons';
-import { useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
-import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
+import { useAccount } from 'wagmi';
 
 const CreatePoll = ({ onPollCreated }) => {
-  const { isOpen, onToggle } = useDisclosure();
-  const [question, setQuestion] = useState('');
-  const [options, setOptions] = useState(['', '']);
-  const [isMultipleChoice, setIsMultipleChoice] = useState(false);
-  const [isWeighted, setIsWeighted] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const toast = useToast();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { address } = useAccount();
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const mutedTextColor = useColorModeValue('gray.600', 'gray.300');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
 
-  // 7 days from now in seconds
-  const deadline = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
-
-  // Filter out empty options and trim whitespace
-  const validOptions = options.map(opt => opt.trim()).filter(opt => opt !== '');
-
-  const { config, error: prepareError } = usePrepareContractWrite({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'createPoll',
-    args: [question.trim(), validOptions, deadline, isWeighted, isMultipleChoice],
-    enabled: question.trim() !== '' && validOptions.length >= 2,
-  });
-
-  const { write: createPoll, isLoading: isCreating, data } = useContractWrite({
-    ...config,
-    onMutate: () => {
-      setIsProcessing(true);
-      toast({
-        title: 'Preparing Transaction',
-        description: 'Please confirm the transaction in your wallet.',
-        status: 'info',
-        duration: null,
-        id: 'creating-poll-prepare',
-      });
-    },
-    onSuccess: (data) => {
-      toast.close('creating-poll-prepare');
-      toast({
-        title: 'Transaction Submitted',
-        description: 'Your poll is being created.',
-        status: 'info',
-        duration: null,
-        id: 'creating-poll',
-      });
-      
-      // Call onPollCreated immediately after transaction is sent
-      if (onPollCreated) {
-        onPollCreated();
-      }
-    },
-    onError: (error) => {
-      setIsProcessing(false);
-      toast.close('creating-poll-prepare');
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create poll',
-        status: 'error',
-        duration: 5000,
-      });
-      console.error('Contract error:', error);
-    },
-  });
-
-  const { isLoading: isWaiting } = useWaitForTransaction({
-    hash: data?.hash,
-    onSuccess: () => {
-      setIsProcessing(false);
-      toast.close('creating-poll');
-      toast({
-        title: 'Success!',
-        description: 'Your poll has been created successfully.',
-        status: 'success',
-        duration: 5000,
-      });
-      resetForm();
-      
-      // Call onPollCreated again after confirmation to ensure UI is up to date
-      if (onPollCreated) {
-        onPollCreated();
-      }
-    },
-    onError: (error) => {
-      setIsProcessing(false);
-      toast.close('creating-poll');
-      if (error.message.includes('could not be found')) {
-        // Transaction might still be pending, let's wait and retry
-        setTimeout(() => {
-          if (onPollCreated) {
-            onPollCreated();
-          }
-        }, 2000);
-        
-        toast({
-          title: 'Transaction Status Unknown',
-          description: 'Your poll might still be processing. Please wait a moment.',
-          status: 'warning',
-          duration: 10000,
-        });
-      } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to create poll. Please try again.',
-          status: 'error',
-          duration: 5000,
-        });
-      }
-      console.error('Transaction error:', error);
-    },
-  });
-
-  const resetForm = () => {
-    setQuestion('');
-    setOptions(['', '']);
-    setIsMultipleChoice(false);
-    setIsWeighted(false);
-    onToggle();
-  };
-
-  const addOption = () => {
-    if (options.length < 5) {
-      setOptions([...options, '']);
-    }
-  };
-
-  const removeOption = (index) => {
-    if (options.length > 2) {
-      setOptions(options.filter((_, i) => i !== index));
-    }
-  };
-
-  const updateOption = (index, value) => {
-    const newOptions = [...options];
-    newOptions[index] = value;
-    setOptions(newOptions);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!createPoll) {
-      if (prepareError) {
-        toast({
-          title: 'Error',
-          description: prepareError.message || 'Failed to prepare transaction',
-          status: 'error',
-          duration: 5000,
-        });
-        console.error('Prepare error:', prepareError);
-      }
-      return;
-    }
-
-    try {
-      createPoll();
-    } catch (error) {
-      console.error('Submit error:', error);
-      setIsProcessing(false);
-      toast({
-        title: 'Error',
-        description: 'Failed to submit transaction. Please try again.',
-        status: 'error',
-        duration: 5000,
-      });
-    }
-  };
-
-  const isFormValid = question.trim() !== '' && validOptions.length >= 2;
-  const isLoading = isCreating || isWaiting;
+  if (!address) {
+    return (
+      <Box
+        p={6}
+        bg={bgColor}
+        borderRadius="xl"
+        borderWidth="1px"
+        borderColor={borderColor}
+        textAlign="center"
+      >
+        <Text fontSize="lg" fontWeight="medium" color={textColor} mb={2}>
+          Create New Poll
+        </Text>
+        <Text color={mutedTextColor} mb={4}>
+          Connect your wallet to create a new poll
+        </Text>
+        <Button isDisabled>Create Poll</Button>
+      </Box>
+    );
+  }
 
   return (
-    <>
-      <Card variant="outline" width="100%" mb={8}>
-        <CardHeader p={4}>
-          <HStack justify="space-between" onClick={onToggle} cursor="pointer" width="100%">
-            <Heading size="md">Create New Poll</Heading>
-            {isOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
-          </HStack>
-        </CardHeader>
-        <Collapse in={isOpen}>
-          <CardBody pt={0}>
-            <form onSubmit={handleSubmit}>
-              <VStack spacing={4} align="stretch">
-                <FormControl isRequired>
-                  <FormLabel>Question</FormLabel>
-                  <Input
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="Enter your question"
-                    isDisabled={isProcessing}
-                  />
-                </FormControl>
+    <Box
+      p={6}
+      bg={bgColor}
+      borderRadius="xl"
+      borderWidth="1px"
+      borderColor={borderColor}
+      textAlign="center"
+    >
+      <Text fontSize="lg" fontWeight="medium" color={textColor} mb={2}>
+        Create New Poll
+      </Text>
+      <Text color={mutedTextColor} mb={4}>
+        Create a new poll and let the community vote
+      </Text>
+      <Button onClick={onOpen}>Create Poll</Button>
 
-                <FormControl isRequired>
-                  <FormLabel>Options (2-5)</FormLabel>
-                  <VStack spacing={2} align="stretch">
-                    {options.map((option, index) => (
-                      <HStack key={index}>
-                        <Input
-                          value={option}
-                          onChange={(e) => updateOption(index, e.target.value)}
-                          placeholder={`Option ${index + 1}`}
-                          isDisabled={isProcessing}
-                        />
-                        {options.length > 2 && (
-                          <Tooltip label="Remove Option">
-                            <IconButton
-                              icon={<DeleteIcon />}
-                              onClick={() => removeOption(index)}
-                              variant="ghost"
-                              colorScheme="red"
-                              isDisabled={isProcessing}
-                            />
-                          </Tooltip>
-                        )}
-                      </HStack>
-                    ))}
-                    {options.length < 5 && (
-                      <Button
-                        leftIcon={<AddIcon />}
-                        onClick={addOption}
-                        size="sm"
-                        variant="ghost"
-                        isDisabled={isProcessing}
-                      >
-                        Add Option
-                      </Button>
-                    )}
-                  </VStack>
-                </FormControl>
-
-                <HStack justify="space-between" spacing={8}>
-                  <FormControl display="flex" alignItems="center">
-                    <Switch
-                      id="multiple-choice"
-                      isChecked={isMultipleChoice}
-                      onChange={(e) => setIsMultipleChoice(e.target.checked)}
-                      mr={2}
-                      isDisabled={isProcessing}
-                    />
-                    <FormLabel htmlFor="multiple-choice" mb={0}>
-                      Multiple Choice
-                    </FormLabel>
-                  </FormControl>
-
-                  <FormControl display="flex" alignItems="center">
-                    <Switch
-                      id="weighted-voting"
-                      isChecked={isWeighted}
-                      onChange={(e) => setIsWeighted(e.target.checked)}
-                      mr={2}
-                      isDisabled={isProcessing}
-                    />
-                    <FormLabel htmlFor="weighted-voting" mb={0}>
-                      Weighted Voting
-                    </FormLabel>
-                  </FormControl>
-                </HStack>
-
-                {prepareError && (
-                  <Text color="red.500" fontSize="sm">
-                    {prepareError.message}
-                  </Text>
-                )}
-
-                {isProcessing && (
-                  <Box>
-                    <Text mb={2}>Creating your poll... Please wait.</Text>
-                    <Progress size="xs" isIndeterminate colorScheme="brand" />
-                  </Box>
-                )}
-
-                <Button
-                  type="submit"
-                  colorScheme="brand"
-                  isLoading={isLoading}
-                  isDisabled={!isFormValid || !createPoll || isProcessing}
-                  loadingText={isWaiting ? 'Creating Poll...' : 'Preparing...'}
-                >
-                  Create Poll
-                </Button>
-              </VStack>
-            </form>
-          </CardBody>
-        </Collapse>
-      </Card>
-
-      {/* Processing Modal */}
-      <Modal isOpen={isProcessing} onClose={() => {}} isCentered closeOnOverlayClick={false}>
+      <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay backdropFilter="blur(4px)" />
-        <ModalContent>
-          <ModalHeader>Creating Poll</ModalHeader>
-          <ModalBody>
-            <VStack spacing={4} py={4}>
-              <Progress size="xs" width="100%" isIndeterminate colorScheme="brand" />
-              <Text>Please wait while your poll is being created...</Text>
-              <Text fontSize="sm" color="gray.500">
-                This may take a few moments. Please don't close this window.
-              </Text>
+        <ModalContent bg={bgColor} borderRadius="xl">
+          <ModalHeader color={textColor}>Create New Poll</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <VStack spacing={4}>
+              <FormControl>
+                <FormLabel color={textColor}>Question</FormLabel>
+                <Input placeholder="Enter your question" bg={bgColor} color={textColor} />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel color={textColor}>Options (one per line)</FormLabel>
+                <Input
+                  as="textarea"
+                  placeholder="Option 1&#10;Option 2&#10;Option 3"
+                  height="100px"
+                  bg={bgColor}
+                  color={textColor}
+                />
+              </FormControl>
+
+              <FormControl display="flex" alignItems="center">
+                <FormLabel mb="0" color={textColor}>Allow Multiple Choices</FormLabel>
+                <Switch colorScheme="brand" />
+              </FormControl>
+
+              <FormControl display="flex" alignItems="center">
+                <FormLabel mb="0" color={textColor}>Enable Token Weighting</FormLabel>
+                <Switch colorScheme="brand" />
+              </FormControl>
+
+              <Button width="full" onClick={onClose}>
+                Create Poll
+              </Button>
             </VStack>
           </ModalBody>
         </ModalContent>
       </Modal>
-    </>
+    </Box>
   );
 };
 

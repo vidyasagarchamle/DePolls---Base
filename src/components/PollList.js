@@ -216,10 +216,11 @@ function PollList() {
           textAlign="center"
           height="200px"
           borderRadius="xl"
+          bg={useColorModeValue('white', 'gray.800')}
         >
           <AlertIcon boxSize="40px" mb={4} />
-          <Heading size="md" mb={2}>Connect Your Wallet</Heading>
-          <Text>Please connect your wallet to view and participate in polls</Text>
+          <Heading size="md" mb={2} color={useColorModeValue('gray.800', 'white')}>Connect Your Wallet</Heading>
+          <Text color={useColorModeValue('gray.600', 'gray.300')}>Please connect your wallet to view and participate in polls</Text>
         </Alert>
       </Container>
     );
