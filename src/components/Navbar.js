@@ -1,29 +1,53 @@
 import React from 'react';
-import { Box, Flex, Button, Heading, Text, useColorModeValue } from '@chakra-ui/react';
-import { useAccount, useBalance } from 'wagmi';
+import {
+  Box,
+  Flex,
+  HStack,
+  useColorMode,
+  IconButton,
+  useColorModeValue,
+} from '@chakra-ui/react';
+import { SunIcon, MoonIcon } from '@chakra-ui/icons';
 import { Web3Button } from '@web3modal/react';
-import { TOKEN_CONTRACT_ADDRESS } from '../contracts/abis';
+import Logo from './Logo';
 
 const Navbar = () => {
-  const { address } = useAccount();
-  const { data: balance } = useBalance({
-    address,
-    token: TOKEN_CONTRACT_ADDRESS,
-  });
+  const { colorMode, toggleColorMode } = useColorMode();
+  const bg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
 
   return (
-    <Box bg={useColorModeValue('white', 'gray.800')} px={4} shadow="sm">
-      <Flex h={16} alignItems="center" justifyContent="space-between">
-        <Heading size="md" color="blue.500">DePolls</Heading>
+    <Box
+      as="nav"
+      position="sticky"
+      top={0}
+      zIndex={100}
+      bg={bg}
+      borderBottom="1px"
+      borderColor={borderColor}
+      backdropFilter="blur(10px)"
+      backgroundColor={useColorModeValue('rgba(255, 255, 255, 0.8)', 'rgba(26, 32, 44, 0.8)')}
+    >
+      <Flex
+        h={16}
+        alignItems="center"
+        justifyContent="space-between"
+        maxW="container.xl"
+        mx="auto"
+        px={4}
+      >
+        <Logo height="32px" />
         
-        <Flex alignItems="center" gap={4}>
-          {address && balance && (
-            <Text fontSize="sm" color="gray.600">
-              {parseFloat(balance?.formatted || '0').toFixed(2)} DPOLL
-            </Text>
-          )}
+        <HStack spacing={4}>
+          <IconButton
+            aria-label={`Switch to ${colorMode === 'light' ? 'dark' : 'light'} mode`}
+            icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+            onClick={toggleColorMode}
+            variant="ghost"
+            colorScheme="brand"
+          />
           <Web3Button />
-        </Flex>
+        </HStack>
       </Flex>
     </Box>
   );

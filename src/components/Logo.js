@@ -1,69 +1,64 @@
 import React from 'react';
-import { Box, Icon, useColorModeValue } from '@chakra-ui/react';
+import { Box, useColorModeValue } from '@chakra-ui/react';
 
-export const DePollsLogo = ({ size = "40px", ...props }) => {
-  const accentColor = useColorModeValue('brand.500', 'brand.200');
-  const bgColor = useColorModeValue('white', 'gray.800');
+const Logo = ({ width = "150px", height = "40px" }) => {
+  const gradientId = "depolls-gradient";
+  const bgGradient = useColorModeValue(
+    "linear(to-r, blue.400, purple.500)",
+    "linear(to-r, blue.200, purple.300)"
+  );
 
   return (
-    <Box
-      as="svg"
-      width={size}
-      height={size}
-      viewBox="0 0 40 40"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
-      {/* Background Circle */}
-      <circle cx="20" cy="20" r="20" fill={bgColor} />
-      
-      {/* Main D shape */}
-      <path
-        d="M12 8h8c5.523 0 10 4.477 10 10s-4.477 10-10 10h-8V8z"
-        fill={accentColor}
-      />
-      
-      {/* Poll bars */}
-      <rect x="16" y="14" width="12" height="2" rx="1" fill={bgColor} />
-      <rect x="16" y="19" width="8" height="2" rx="1" fill={bgColor} />
-      <rect x="16" y="24" width="10" height="2" rx="1" fill={bgColor} />
+    <Box w={width} h={height}>
+      <svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 150 40"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style={{ stopColor: 'var(--chakra-colors-blue-400)' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--chakra-colors-purple-500)' }} />
+          </linearGradient>
+        </defs>
+        
+        {/* Main Logo Shape - "D" with voting checkmark */}
+        <path
+          d="M20 5h15c5.523 0 10 4.477 10 10s-4.477 10-10 10H20V5z"
+          stroke={`url(#${gradientId})`}
+          strokeWidth="2.5"
+          fill="none"
+        />
+        <path
+          d="M28 15l4 4 6-6"
+          stroke={`url(#${gradientId})`}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+        
+        {/* Text "ePolls" */}
+        <text
+          x="50"
+          y="25"
+          fontFamily="Outfit"
+          fontSize="24"
+          fontWeight="600"
+          fill={`url(#${gradientId})`}
+        >
+          ePolls
+        </text>
+        
+        {/* Decorative dots representing voting/polling */}
+        <circle cx="140" cy="10" r="2" fill={`url(#${gradientId})`} />
+        <circle cx="140" cy="20" r="2" fill={`url(#${gradientId})`} />
+        <circle cx="140" cy="30" r="2" fill={`url(#${gradientId})`} />
+      </svg>
     </Box>
   );
 };
 
-export const TokenLogo = ({ size = "40px", ...props }) => {
-  const accentColor = useColorModeValue('brand.500', 'brand.200');
-  const bgColor = useColorModeValue('white', 'gray.800');
-
-  return (
-    <Box
-      as="svg"
-      width={size}
-      height={size}
-      viewBox="0 0 40 40"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
-      {/* Background Circle */}
-      <circle cx="20" cy="20" r="20" fill={bgColor} />
-      
-      {/* Token symbol */}
-      <path
-        d="M20 4c8.837 0 16 7.163 16 16s-7.163 16-16 16S4 28.837 4 20 11.163 4 20 4zm0 4c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12S26.627 8 20 8zm0 4c4.418 0 8 3.582 8 8s-3.582 8-8 8-8-3.582-8-8 3.582-8 8-8z"
-        fill={accentColor}
-      />
-      
-      {/* Poll indicator */}
-      <path
-        d="M20 16v8M16 20h8"
-        stroke={bgColor}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </Box>
-  );
-};
-
-export default DePollsLogo; 
+export default Logo; 
