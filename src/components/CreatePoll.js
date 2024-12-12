@@ -94,27 +94,31 @@ const CreatePoll = ({ onPollCreated }) => {
     const currentTime = BigInt(Math.floor(Date.now() / 1000));
     const deadlineTime = getDeadlineTimestamp();
 
-    const isValid = Boolean(
+    // Log individual validations
+    console.log('Validation checks:', {
+      question: question.trim(),
+      questionLength: question.trim().length,
+      validOptions,
+      validOptionsCount: validOptions.length,
+      deadline: deadline,
+      deadlineTime: deadlineTime.toString(),
+      currentTime: currentTime.toString(),
+      hasWhitelist,
+      validAddresses,
+      validAddressesCount: validAddresses.length
+    });
+
+    const isValid = 
       question.trim().length > 0 && 
       validOptions.length >= 2 &&
       deadlineTime > currentTime &&
-      (!hasWhitelist || validAddresses.length > 0)
-    );
-
-    console.log('Form validation:', {
-      hasQuestion: question.trim().length > 0,
-      validOptionsCount: validOptions.length,
-      deadline: deadlineTime.toString(),
-      currentTime: currentTime.toString(),
-      hasValidWhitelist: !hasWhitelist || validAddresses.length > 0,
-      isValid
-    });
+      (!hasWhitelist || validAddresses.length > 0);
 
     return isValid;
   };
 
   // Contract interaction setup
-  const { config: createConfig } = usePrepareContractWrite({
+  const { config: createConfig, error: prepareError } = usePrepareContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'createPoll',
@@ -122,7 +126,7 @@ const CreatePoll = ({ onPollCreated }) => {
     enabled: isFormValid(),
   });
 
-  const { write: createPoll, data: createData, isLoading: isCreating } = useContractWrite({
+  const { write: createPoll, data: createData, isLoading: isCreating, error: writeError } = useContractWrite({
     ...createConfig,
     onSuccess: () => {
       toast({
@@ -265,6 +269,9 @@ const CreatePoll = ({ onPollCreated }) => {
     hasValidDeadline: getDeadlineTimestamp() > BigInt(Math.floor(Date.now() / 1000)),
     canCreatePoll: Boolean(createPoll),
     contractArgs: getContractArgs(),
+    prepareError,
+    writeError,
+    isFormValid: isFormValid()
   });
 
   return (
@@ -460,7 +467,7 @@ const CreatePoll = ({ onPollCreated }) => {
             onClick={handleCreatePoll}
             isLoading={isLoading}
             loadingText="Creating Poll..."
-            disabled={!createPoll || isLoading}
+            isDisabled={!isFormValid() || !createPoll || isLoading}
             size="lg"
             borderRadius="xl"
             fontWeight="semibold"
@@ -475,6 +482,13 @@ const CreatePoll = ({ onPollCreated }) => {
           >
             Create Poll
           </Button>
+
+          {(prepareError || writeError) && (
+            <Alert status="error" borderRadius="lg">
+              <AlertIcon />
+              <Text>{prepareError?.message || writeError?.message || 'Error preparing transaction'}</Text>
+            </Alert>
+          )}
         </VStack>
       </CardBody>
     </Card>
