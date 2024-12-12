@@ -13,19 +13,25 @@ import {
   IconButton,
   Tooltip,
   Badge,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
+  Container,
 } from '@chakra-ui/react';
-import { RepeatIcon, StarIcon, LockIcon } from '@chakra-ui/icons';
+import { RepeatIcon } from '@chakra-ui/icons';
 import { useContractRead, useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import Poll from './Poll';
+import CreatePoll from './CreatePoll';
 
 const PollList = () => {
   const [polls, setPolls] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all', 'active', 'expired', 'voted', 'rewards', 'whitelist'
+  const [isLoading, setIsLoading] = useState(false);
+  const [filter, setFilter] = useState('all');
   const toast = useToast();
-  const { address } = useAccount();
+  const { address, isConnecting } = useAccount();
 
   const bgColor = useColorModeValue('white', 'gray.800');
   const textColor = useColorModeValue('gray.800', 'white');
@@ -63,7 +69,7 @@ const PollList = () => {
         hasWhitelist: pollData.hasWhitelist,
         rewardToken: pollData.rewardToken,
         rewardAmount: pollData.rewardAmount,
-        options: options.map((opt, index) => ({
+        options: options.map((opt) => ({
           text: opt.text,
           voteCount: opt.voteCount.toNumber(),
         })),
@@ -78,7 +84,7 @@ const PollList = () => {
   };
 
   const fetchPolls = async () => {
-    if (!pollCount) return;
+    if (!pollCount || !address) return;
     
     setIsLoading(true);
     try {
@@ -105,8 +111,11 @@ const PollList = () => {
   };
 
   useEffect(() => {
-    if (pollCount) {
+    if (address && pollCount) {
       fetchPolls();
+    } else if (!address) {
+      setIsLoading(false);
+      setPolls([]);
     }
   }, [pollCount, address]);
 
@@ -150,22 +159,55 @@ const PollList = () => {
     );
   };
 
-  if (isLoading) {
+  if (isConnecting) {
     return (
-      <Center py={10}>
-        <VStack spacing={4}>
-          <Spinner size="xl" color="brand.500" />
-          <Text color={textColor}>Loading polls...</Text>
-        </VStack>
-      </Center>
+      <Container maxW="container.lg" py={8}>
+        <CreatePoll onPollCreated={handleRefresh} />
+        <Center py={10}>
+          <VStack spacing={4}>
+            <Spinner size="xl" color="brand.500" />
+            <Text color={textColor}>Connecting wallet...</Text>
+          </VStack>
+        </Center>
+      </Container>
+    );
+  }
+
+  if (!address) {
+    return (
+      <Container maxW="container.lg" py={8}>
+        <CreatePoll onPollCreated={handleRefresh} />
+        <Alert
+          status="info"
+          variant="subtle"
+          flexDirection="column"
+          alignItems="center"
+          justifyContent="center"
+          textAlign="center"
+          height="200px"
+          mt={6}
+          bg={bgColor}
+          borderRadius="xl"
+        >
+          <AlertIcon boxSize="40px" mr={0} />
+          <AlertTitle mt={4} mb={1} fontSize="lg">
+            Connect Your Wallet
+          </AlertTitle>
+          <AlertDescription maxWidth="sm">
+            Please connect your wallet to view and interact with polls
+          </AlertDescription>
+        </Alert>
+      </Container>
     );
   }
 
   const filteredPolls = filterPolls(polls);
 
   return (
-    <Box>
-      <HStack spacing={4} mb={6} justify="space-between">
+    <Container maxW="container.lg" py={8}>
+      <CreatePoll onPollCreated={handleRefresh} />
+      
+      <HStack spacing={4} mb={6} mt={6} justify="space-between">
         <HStack spacing={4}>
           <Select
             value={filter}
@@ -174,6 +216,7 @@ const PollList = () => {
             color={textColor}
             borderColor={borderColor}
             _hover={{ borderColor: 'brand.500' }}
+            w="200px"
           >
             <option value="all">All Polls</option>
             <option value="active">Active</option>
@@ -195,7 +238,14 @@ const PollList = () => {
         </Tooltip>
       </HStack>
 
-      {filteredPolls.length > 0 ? (
+      {isLoading ? (
+        <Center py={10}>
+          <VStack spacing={4}>
+            <Spinner size="xl" color="brand.500" />
+            <Text color={textColor}>Loading polls...</Text>
+          </VStack>
+        </Center>
+      ) : filteredPolls.length > 0 ? (
         <VStack spacing={6} align="stretch">
           {filteredPolls.map((poll) => (
             <Poll
@@ -216,7 +266,7 @@ const PollList = () => {
           </VStack>
         </Center>
       )}
-    </Box>
+    </Container>
   );
 };
 

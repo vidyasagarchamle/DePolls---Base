@@ -26,6 +26,7 @@ import {
   Spinner,
   Progress,
   Divider,
+  useDisclosure,
 } from '@chakra-ui/react';
 import { DeleteIcon, ViewIcon, LockIcon, StarIcon, CheckIcon } from '@chakra-ui/icons';
 import { useContractWrite, usePrepareContractWrite, useAccount, useWaitForTransaction } from 'wagmi';
