@@ -168,6 +168,8 @@ const CreatePoll = ({ onPollCreated }) => {
     functionName: 'createPoll',
     args: getContractArgs(),
     enabled: isFormValid(),
+    chainId: 84532, // Base Sepolia
+    gas: BigInt(500000), // Set gas limit
   });
 
   const { write: createPoll, data: createData, isLoading: isCreating, error: writeError } = useContractWrite({
@@ -184,15 +186,23 @@ const CreatePoll = ({ onPollCreated }) => {
     onError: (error) => {
       console.error('Contract write error:', error);
       let errorMessage = 'Failed to create poll';
-      if (error.message.includes("Deadline must be in the future")) {
+
+      // Check for specific error messages
+      const errorString = error.message.toLowerCase();
+      if (errorString.includes("user rejected")) {
+        errorMessage = "Transaction was rejected";
+      } else if (errorString.includes("insufficient funds")) {
+        errorMessage = "Insufficient funds for gas";
+      } else if (errorString.includes("nonce too low")) {
+        errorMessage = "Please try again";
+      } else if (errorString.includes("deadline must be in the future")) {
         errorMessage = "Deadline must be at least 5 minutes in the future";
-      } else if (error.message.includes("Question cannot be empty")) {
+      } else if (errorString.includes("question cannot be empty")) {
         errorMessage = "Question cannot be empty";
-      } else if (error.message.includes("At least 2 options required")) {
+      } else if (errorString.includes("at least 2 options required")) {
         errorMessage = "At least 2 different options are required";
-      } else if (error.message.includes("execution reverted")) {
-        errorMessage = "Invalid poll data. Please check all fields and try again.";
       }
+
       toast({
         title: 'Error',
         description: errorMessage,
@@ -279,7 +289,7 @@ const CreatePoll = ({ onPollCreated }) => {
     try {
       console.log('Creating poll with args:', getContractArgs());
       if (!createPoll) {
-        throw new Error('Create poll function not available. Please make sure your wallet is connected.');
+        throw new Error('Create poll function not available. Please make sure your wallet is connected and on Base Sepolia network.');
       }
       await createPoll();
     } catch (error) {
