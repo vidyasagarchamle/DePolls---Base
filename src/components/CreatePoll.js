@@ -14,31 +14,14 @@ import {
   FormLabel,
   IconButton,
   Tooltip,
-  Select,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper,
   Divider,
   Alert,
   AlertIcon,
-  Badge,
 } from '@chakra-ui/react';
 import { AddIcon, CloseIcon } from '@chakra-ui/icons';
 import { useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
-
-// Supported tokens for rewards
-const SUPPORTED_TOKENS = [
-  {
-    symbol: 'ETH',
-    name: 'Base ETH',
-    address: ethers.constants.AddressZero,
-    decimals: 18,
-  }
-];
 
 const CreatePoll = ({ onPollCreated }) => {
   const [question, setQuestion] = useState('');
@@ -47,9 +30,6 @@ const CreatePoll = ({ onPollCreated }) => {
   const [isMultipleChoice, setIsMultipleChoice] = useState(false);
   const [hasWhitelist, setHasWhitelist] = useState(false);
   const [whitelistedAddresses, setWhitelistedAddresses] = useState(['']);
-  const [hasReward, setHasReward] = useState(false);
-  const [selectedToken, setSelectedToken] = useState(SUPPORTED_TOKENS[0].address);
-  const [rewardPerVote, setRewardPerVote] = useState('0.001');
 
   const toast = useToast();
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -74,8 +54,6 @@ const CreatePoll = ({ onPollCreated }) => {
       isMultipleChoice,
       hasWhitelist,
       whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr)),
-      selectedToken,
-      hasReward ? ethers.utils.parseEther(rewardPerVote.toString()) : 0,
     ],
     enabled: question.trim() !== '' && 
              options.filter(opt => opt.trim() !== '').length >= 2 &&
@@ -112,8 +90,6 @@ const CreatePoll = ({ onPollCreated }) => {
       setIsMultipleChoice(false);
       setHasWhitelist(false);
       setWhitelistedAddresses(['']);
-      setHasReward(false);
-      setRewardPerVote('0.001');
       if (onPollCreated) {
         onPollCreated();
       }
@@ -300,65 +276,12 @@ const CreatePoll = ({ onPollCreated }) => {
           )}
         </FormControl>
 
-        <Divider />
-
-        {/* Rewards */}
-        <FormControl>
-          <HStack justify="space-between" mb={4}>
-            <FormLabel mb="0">Enable Rewards</FormLabel>
-            <Switch
-              isChecked={hasReward}
-              onChange={(e) => setHasReward(e.target.checked)}
-              disabled={isLoading}
-            />
-          </HStack>
-          
-          {hasReward && (
-            <VStack spacing={4}>
-              <HStack spacing={4} width="100%">
-                <FormControl flex="1">
-                  <FormLabel>Token</FormLabel>
-                  <Select
-                    value={selectedToken}
-                    onChange={(e) => setSelectedToken(e.target.value)}
-                    disabled={isLoading}
-                  >
-                    {SUPPORTED_TOKENS.map((token) => (
-                      <option key={token.address} value={token.address}>
-                        {token.name}
-                      </option>
-                    ))}
-                  </Select>
-                </FormControl>
-                
-                <FormControl flex="1">
-                  <FormLabel>Reward per Vote</FormLabel>
-                  <NumberInput
-                    value={rewardPerVote}
-                    onChange={(value) => setRewardPerVote(value)}
-                    min={0.0001}
-                    step={0.0001}
-                    precision={4}
-                    disabled={isLoading}
-                  >
-                    <NumberInputField />
-                    <NumberInputStepper>
-                      <NumberIncrementStepper />
-                      <NumberDecrementStepper />
-                    </NumberInputStepper>
-                  </NumberInput>
-                </FormControl>
-              </HStack>
-              
-              <Alert status="info" borderRadius="md">
-                <AlertIcon />
-                <Text fontSize="sm">
-                  Make sure you have enough {selectedToken === ethers.constants.AddressZero ? 'ETH' : 'tokens'} to reward all potential voters
-                </Text>
-              </Alert>
-            </VStack>
-          )}
-        </FormControl>
+        <Alert status="info" borderRadius="md">
+          <AlertIcon />
+          <Text fontSize="sm">
+            Voting is gasless! Users can vote without paying any gas fees.
+          </Text>
+        </Alert>
 
         {/* Create Button */}
         <Button
