@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Box,
   VStack,
@@ -46,7 +46,6 @@ import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 
 const Poll = ({ poll, onVote, onClose }) => {
   const [selectedOptions, setSelectedOptions] = useState([]);
-  const [optionWeights, setOptionWeights] = useState({});
   const { isOpen, onOpen, onClose: closeModal } = useDisclosure();
   const toast = useToast();
 

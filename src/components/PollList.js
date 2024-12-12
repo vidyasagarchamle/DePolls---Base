@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   VStack,
   Box,
@@ -34,7 +34,7 @@ import {
   Divider,
 } from '@chakra-ui/react';
 import { RepeatIcon, ChevronDownIcon } from '@chakra-ui/icons';
-import { useContractRead, useAccount } from 'wagmi';
+import { useContractRead, useAccount, useContractWrite, useWaitForTransaction, usePublicClient } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import Poll from './Poll';
@@ -46,6 +46,7 @@ const PollList = () => {
   const [filter, setFilter] = useState('all');
   const toast = useToast();
   const { address, isConnecting } = useAccount();
+  const publicClient = usePublicClient();
 
   const bgColor = useColorModeValue('white', 'gray.800');
   const textColor = useColorModeValue('gray.800', 'white');
@@ -53,14 +54,12 @@ const PollList = () => {
   const borderColor = useColorModeValue('gray.100', 'gray.700');
   const accentColor = useColorModeValue('brand.500', 'brand.300');
 
+  // Get poll count
   const { data: pollCount, refetch: refetchPollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
-    onSuccess: (data) => {
-      console.log('Poll count data:', data);
-    },
     onError: (error) => {
       console.error('Error fetching poll count:', error);
       toast({
@@ -72,69 +71,65 @@ const PollList = () => {
     },
   });
 
-  const fetchPollDetails = async (pollId) => {
-    if (!window.ethereum) return null;
+  const fetchPollDetails = useCallback(async (pollId) => {
+    if (!publicClient) return null;
 
     try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
       const contract = new ethers.Contract(
         POLLS_CONTRACT_ADDRESS,
         DePollsABI,
-        provider
+        publicClient
       );
 
-      console.log(`Fetching poll ${pollId}...`);
+      // Get poll data
+      const [poll, options, hasVoted, isWhitelisted] = await Promise.all([
+        contract.polls(pollId),
+        contract.getPollOptions(pollId),
+        address ? contract.hasVoted(pollId, address) : false,
+        address ? contract.isWhitelisted(pollId, address) : false
+      ]);
 
-      const pollData = await contract.getPoll(pollId);
-      console.log(`Poll ${pollId} data:`, pollData);
-
-      if (!pollData || !pollData.creator) {
-        console.log(`Poll ${pollId} does not exist`);
+      if (!poll || !poll.creator || poll.creator === ethers.constants.AddressZero) {
+        console.log(`Invalid poll data for ID ${pollId}`);
         return null;
       }
 
-      const hasVoted = address ? await contract.hasVoted(pollId, address) : false;
-      const isCreator = address && pollData.creator.toLowerCase() === address.toLowerCase();
-      const isWhitelisted = address ? await contract.isWhitelisted(pollId, address) : false;
+      const isCreator = address && poll.creator.toLowerCase() === address.toLowerCase();
 
       return {
         id: pollId,
-        question: pollData.question,
-        creator: pollData.creator,
-        deadline: pollData.deadline.toNumber(),
-        isMultipleChoice: pollData.isMultipleChoice,
-        isActive: pollData.isActive,
-        options: pollData.options.map((opt) => ({
+        question: poll.question,
+        creator: poll.creator,
+        deadline: poll.deadline.toNumber(),
+        isMultipleChoice: poll.isMultipleChoice,
+        isActive: poll.isActive,
+        hasWhitelist: poll.hasWhitelist,
+        options: options.map((opt) => ({
           text: opt.text,
           voteCount: opt.voteCount.toNumber(),
         })),
         hasVoted,
         isCreator,
         isWhitelisted,
+        totalVotes: options.reduce((acc, opt) => acc + opt.voteCount.toNumber(), 0)
       };
     } catch (error) {
       console.error(`Error fetching poll ${pollId}:`, error);
-      if (error.message.includes("revert")) {
-        console.log("Contract revert error - poll might not exist");
-        return null;
-      }
       return null;
     }
-  };
+  }, [publicClient, address]);
 
-  const fetchPolls = async () => {
-    if (!pollCount || !window.ethereum) {
-      console.log('No poll count or ethereum:', { pollCount, ethereum: window.ethereum });
+  const fetchPolls = useCallback(async () => {
+    if (!pollCount || !publicClient) {
+      console.log('No poll count or provider:', { pollCount, publicClient });
       return;
     }
     
     setIsLoading(true);
+    setPolls([]); // Clear existing polls before fetching
+    
     try {
-      const count = typeof pollCount === 'number' 
-        ? pollCount 
-        : pollCount.toString ? parseInt(pollCount.toString()) 
-        : 0;
-
+      const count = parseInt(pollCount.toString());
       console.log('Fetching polls with count:', count);
 
       if (count === 0) {
@@ -142,18 +137,16 @@ const PollList = () => {
         return;
       }
 
+      // Fetch all polls in parallel
       const pollPromises = [];
       for (let i = count - 1; i >= 0; i--) {
-        pollPromises.push(fetchPollDetails(i).catch(error => {
-          console.error(`Failed to fetch poll ${i}:`, error);
-          return null;
-        }));
+        pollPromises.push(fetchPollDetails(i));
       }
+
+      const results = await Promise.all(pollPromises);
+      const validPolls = results.filter(poll => poll !== null);
       
-      const pollResults = await Promise.all(pollPromises);
-      const validPolls = pollResults.filter(poll => poll !== null);
       console.log('Fetched polls:', validPolls);
-      
       setPolls(validPolls);
     } catch (error) {
       console.error('Error fetching polls:', error);
@@ -166,122 +159,48 @@ const PollList = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [pollCount, publicClient, fetchPollDetails, toast]);
 
+  // Reset polls when address changes
   useEffect(() => {
-    if (pollCount && window.ethereum) {
-      console.log('Poll count or address changed:', { pollCount, address });
+    setPolls([]);
+  }, [address]);
+
+  // Fetch polls when pollCount or address changes
+  useEffect(() => {
+    if (pollCount && publicClient) {
+      console.log('Poll count or address changed:', { pollCount: pollCount.toString(), address });
       fetchPolls();
     }
-  }, [pollCount, address]);
+  }, [pollCount, address, fetchPolls]);
 
-  const handleRefresh = () => {
-    console.log('Refreshing polls...');
-    refetchPollCount();
-    fetchPolls();
-  };
-
-  const filterPolls = (polls) => {
-    const now = Date.now();
+  // Filter polls
+  const filterPolls = useCallback((polls) => {
+    const now = Date.now() / 1000; // Convert to seconds to match contract timestamp
     
     return polls.filter(poll => {
-      if (poll.hasWhitelist && !poll.isWhitelisted) {
+      if (poll.hasWhitelist && !poll.isWhitelisted && !poll.isCreator) {
         return false;
       }
 
       switch (filter) {
         case 'active':
-          return poll.deadline * 1000 > now && poll.isActive;
+          return poll.deadline > now && poll.isActive;
         case 'expired':
-          return poll.deadline * 1000 <= now || !poll.isActive;
+          return poll.deadline <= now || !poll.isActive;
         case 'voted':
           return poll.hasVoted;
         default:
           return true;
       }
     });
-  };
+  }, [filter]);
 
-  const renderFilterBadge = () => {
-    const count = filterPolls(polls).length;
-    return (
-      <Tag colorScheme="brand" borderRadius="full" size="md">
-        <TagLabel>{count} poll{count !== 1 ? 's' : ''}</TagLabel>
-      </Tag>
-    );
-  };
-
-  if (!window.ethereum) {
-    return (
-      <Container maxW="container.lg" py={8}>
-        <CreatePoll onPollCreated={handleRefresh} />
-        <Alert
-          status="warning"
-          variant="subtle"
-          flexDirection="column"
-          alignItems="center"
-          justifyContent="center"
-          textAlign="center"
-          height="200px"
-          mt={6}
-          bg={bgColor}
-          borderRadius="2xl"
-          boxShadow="sm"
-        >
-          <AlertIcon boxSize="40px" mr={0} />
-          <AlertTitle mt={4} mb={1} fontSize="lg">
-            Web3 Wallet Required
-          </AlertTitle>
-          <AlertDescription maxWidth="sm">
-            Please install a Web3 wallet like MetaMask to view and interact with polls
-          </AlertDescription>
-        </Alert>
-      </Container>
-    );
-  }
-
-  if (isConnecting) {
-    return (
-      <Container maxW="container.lg" py={8}>
-        <CreatePoll onPollCreated={handleRefresh} />
-        <Center py={10}>
-          <VStack spacing={4}>
-            <Spinner size="xl" color="brand.500" thickness="3px" speed="0.8s" />
-            <Text color={textColor}>Connecting wallet...</Text>
-          </VStack>
-        </Center>
-      </Container>
-    );
-  }
-
-  if (!address) {
-    return (
-      <Container maxW="container.lg" py={8}>
-        <CreatePoll onPollCreated={handleRefresh} />
-        <Alert
-          status="info"
-          variant="subtle"
-          flexDirection="column"
-          alignItems="center"
-          justifyContent="center"
-          textAlign="center"
-          height="200px"
-          mt={6}
-          bg={bgColor}
-          borderRadius="2xl"
-          boxShadow="sm"
-        >
-          <AlertIcon boxSize="40px" mr={0} />
-          <AlertTitle mt={4} mb={1} fontSize="lg">
-            Connect Your Wallet
-          </AlertTitle>
-          <AlertDescription maxWidth="sm">
-            Please connect your wallet to view and interact with polls
-          </AlertDescription>
-        </Alert>
-      </Container>
-    );
-  }
+  const handleRefresh = useCallback(() => {
+    console.log('Refreshing polls...');
+    setPolls([]);
+    refetchPollCount();
+  }, [refetchPollCount]);
 
   const filteredPolls = filterPolls(polls);
 
@@ -323,7 +242,9 @@ const PollList = () => {
               </MenuList>
             </Menu>
 
-            {renderFilterBadge()}
+            <Tag colorScheme="brand" borderRadius="full" size="md">
+              <TagLabel>{filteredPolls.length} poll{filteredPolls.length !== 1 ? 's' : ''}</TagLabel>
+            </Tag>
 
             <Spacer />
 
@@ -342,7 +263,7 @@ const PollList = () => {
         </CardHeader>
 
         <CardBody>
-          {isLoading ? (
+          {isLoading && polls.length === 0 ? (
             <Center py={10}>
               <VStack spacing={4}>
                 <Spinner size="xl" color="brand.500" thickness="3px" speed="0.8s" />

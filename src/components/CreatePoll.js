@@ -89,6 +89,9 @@ const CreatePoll = ({ onPollCreated }) => {
     functionName: 'createPoll',
     args: getContractArgs(),
     enabled: isFormValid(),
+    onError: (error) => {
+      console.error('Prepare error:', error);
+    }
   });
 
   const { write: createPoll, data: createData, isLoading: isCreating } = useContractWrite({
@@ -201,6 +204,9 @@ const CreatePoll = ({ onPollCreated }) => {
     }
 
     try {
+      if (!createPoll) {
+        throw new Error('Create poll function not available');
+      }
       console.log('Creating poll with args:', getContractArgs());
       await createPoll?.();
     } catch (error) {
