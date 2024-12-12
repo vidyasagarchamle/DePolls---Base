@@ -1,20 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract DePollsToken is ERC20, Ownable {
-    constructor() ERC20("DePolls Token", "DPOLL") {
-        _mint(msg.sender, 1000000 * 10 ** decimals());
-    }
-
-    function mint(address to, uint256 amount) public onlyOwner {
-        _mint(to, amount);
-    }
-}
-
-contract DePolls is Ownable {
+contract DePolls is ReentrancyGuard {
     struct Option {
         string text;
         uint256 voteCount;
@@ -28,25 +18,48 @@ contract DePolls is Ownable {
         uint256 deadline;
         bool isWeighted;
         bool isMultipleChoice;
-        mapping(address => bool) hasVoted;
-        mapping(address => uint256[]) votes;
         bool isActive;
-        bool isDeleted;
+        bool hasWhitelist;
+        address rewardToken;
+        uint256 rewardAmount;
+        mapping(address => bool) hasVoted;
+        mapping(address => bool) isWhitelisted;
+        address[] voters;
     }
 
     uint256 public pollCount;
-    uint256 public activePollCount;
     mapping(uint256 => Poll) public polls;
-    DePollsToken public rewardToken;
-    uint256 public constant REWARD_AMOUNT = 10 * 10**18; // 10 tokens
 
-    event PollCreated(uint256 indexed pollId, address creator, string question);
-    event Voted(uint256 indexed pollId, address voter, uint256[] optionIndices);
-    event PollDeleted(uint256 indexed pollId);
+    event PollCreated(
+        uint256 indexed pollId,
+        address indexed creator,
+        string question,
+        uint256 deadline,
+        bool isWeighted,
+        bool isMultipleChoice,
+        bool hasWhitelist,
+        address rewardToken,
+        uint256 rewardAmount
+    );
+    event Voted(uint256 indexed pollId, address indexed voter, uint256[] optionIndices);
     event PollClosed(uint256 indexed pollId);
+    event WhitelistUpdated(uint256 indexed pollId, address[] voters, bool isAdded);
+    event RewardClaimed(uint256 indexed pollId, address indexed voter, uint256 amount);
 
-    constructor(address _tokenAddress) {
-        rewardToken = DePollsToken(_tokenAddress);
+    modifier onlyCreator(uint256 _pollId) {
+        require(polls[_pollId].creator == msg.sender, "Not poll creator");
+        _;
+    }
+
+    modifier pollExists(uint256 _pollId) {
+        require(_pollId < pollCount, "Poll does not exist");
+        _;
+    }
+
+    modifier pollActive(uint256 _pollId) {
+        require(polls[_pollId].isActive, "Poll is not active");
+        require(block.timestamp < polls[_pollId].deadline, "Poll has ended");
+        _;
     }
 
     function createPoll(
@@ -54,15 +67,20 @@ contract DePolls is Ownable {
         string[] memory _options,
         uint256 _deadline,
         bool _isWeighted,
-        bool _isMultipleChoice
-    ) public returns (uint256) {
-        require(bytes(_question).length > 0, "Question cannot be empty");
-        require(_options.length >= 2 && _options.length <= 5, "Must have 2-5 options");
-        require(_deadline > block.timestamp, "Deadline must be in future");
-        require(_deadline <= block.timestamp + 30 days, "Deadline too far in future");
+        bool _isMultipleChoice,
+        bool _hasWhitelist,
+        address _rewardToken,
+        uint256 _rewardAmount
+    ) external returns (uint256) {
+        require(_options.length >= 2 && _options.length <= 5, "Invalid number of options");
+        require(_deadline > block.timestamp, "Invalid deadline");
+        require(_rewardAmount == 0 || _rewardToken != address(0), "Invalid reward configuration");
 
-        for (uint i = 0; i < _options.length; i++) {
-            require(bytes(_options[i]).length > 0, "Option cannot be empty");
+        if (_rewardAmount > 0) {
+            require(
+                IERC20(_rewardToken).allowance(msg.sender, address(this)) >= _rewardAmount * 1000,
+                "Insufficient reward token allowance"
+            );
         }
 
         uint256 pollId = pollCount++;
@@ -74,7 +92,9 @@ contract DePolls is Ownable {
         newPoll.isWeighted = _isWeighted;
         newPoll.isMultipleChoice = _isMultipleChoice;
         newPoll.isActive = true;
-        newPoll.isDeleted = false;
+        newPoll.hasWhitelist = _hasWhitelist;
+        newPoll.rewardToken = _rewardToken;
+        newPoll.rewardAmount = _rewardAmount;
 
         for (uint i = 0; i < _options.length; i++) {
             newPoll.options.push(Option({
@@ -83,81 +103,138 @@ contract DePolls is Ownable {
             }));
         }
 
-        activePollCount++;
-        emit PollCreated(pollId, msg.sender, _question);
+        emit PollCreated(
+            pollId,
+            msg.sender,
+            _question,
+            _deadline,
+            _isWeighted,
+            _isMultipleChoice,
+            _hasWhitelist,
+            _rewardToken,
+            _rewardAmount
+        );
+
         return pollId;
     }
 
-    function vote(uint256 _pollId, uint256[] memory _optionIndices) public {
+    function updateWhitelist(uint256 _pollId, address[] calldata _voters, bool _isAdded) 
+        external 
+        pollExists(_pollId)
+        onlyCreator(_pollId)
+    {
+        require(polls[_pollId].hasWhitelist, "Poll does not use whitelist");
+        
+        for (uint i = 0; i < _voters.length; i++) {
+            polls[_pollId].isWhitelisted[_voters[i]] = _isAdded;
+        }
+
+        emit WhitelistUpdated(_pollId, _voters, _isAdded);
+    }
+
+    function vote(uint256 _pollId, uint256[] calldata _optionIndices) 
+        external 
+        pollExists(_pollId)
+        pollActive(_pollId)
+        nonReentrant
+    {
         Poll storage poll = polls[_pollId];
-        require(!poll.isDeleted, "Poll has been deleted");
-        require(poll.isActive, "Poll is not active");
-        require(block.timestamp < poll.deadline, "Poll has ended");
         require(!poll.hasVoted[msg.sender], "Already voted");
-        require(msg.sender != poll.creator, "Cannot vote on own poll");
         require(_optionIndices.length > 0, "Must vote for at least one option");
         
         if (!poll.isMultipleChoice) {
             require(_optionIndices.length == 1, "Can only vote for one option");
         }
 
+        if (poll.hasWhitelist) {
+            require(poll.isWhitelisted[msg.sender], "Not whitelisted");
+        }
+
         for (uint i = 0; i < _optionIndices.length; i++) {
-            require(_optionIndices[i] < poll.options.length, "Invalid option");
-            poll.options[_optionIndices[i]].voteCount += 1;
+            require(_optionIndices[i] < poll.options.length, "Invalid option index");
+            poll.options[_optionIndices[i]].voteCount++;
         }
 
         poll.hasVoted[msg.sender] = true;
-        poll.votes[msg.sender] = _optionIndices;
+        poll.voters.push(msg.sender);
 
-        require(rewardToken.transfer(msg.sender, REWARD_AMOUNT), "Reward transfer failed");
         emit Voted(_pollId, msg.sender, _optionIndices);
     }
 
-    function getPoll(uint256 _pollId) public view returns (
+    function closePoll(uint256 _pollId) 
+        external 
+        pollExists(_pollId)
+        onlyCreator(_pollId)
+    {
+        require(polls[_pollId].isActive, "Poll already closed");
+        polls[_pollId].isActive = false;
+        emit PollClosed(_pollId);
+    }
+
+    function claimReward(uint256 _pollId) 
+        external 
+        pollExists(_pollId)
+        nonReentrant
+    {
+        Poll storage poll = polls[_pollId];
+        require(poll.hasVoted[msg.sender], "Haven't voted in this poll");
+        require(poll.rewardAmount > 0, "No reward for this poll");
+        require(poll.rewardToken != address(0), "No reward token set");
+        
+        uint256 rewardAmount = poll.rewardAmount;
+        require(
+            IERC20(poll.rewardToken).transferFrom(poll.creator, msg.sender, rewardAmount),
+            "Reward transfer failed"
+        );
+
+        emit RewardClaimed(_pollId, msg.sender, rewardAmount);
+    }
+
+    // View functions
+    function getPoll(uint256 _pollId) external view returns (
         uint256 id,
         address creator,
         string memory question,
+        Option[] memory options,
         uint256 deadline,
         bool isWeighted,
         bool isMultipleChoice,
         bool isActive,
-        Option[] memory options
+        bool hasWhitelist,
+        address rewardToken,
+        uint256 rewardAmount
     ) {
+        require(_pollId < pollCount, "Poll does not exist");
         Poll storage poll = polls[_pollId];
-        require(!poll.isDeleted, "Poll has been deleted");
         return (
             poll.id,
             poll.creator,
             poll.question,
+            poll.options,
             poll.deadline,
             poll.isWeighted,
             poll.isMultipleChoice,
             poll.isActive,
-            poll.options
+            poll.hasWhitelist,
+            poll.rewardToken,
+            poll.rewardAmount
         );
     }
 
-    function hasVoted(uint256 _pollId, address _voter) public view returns (bool) {
-        Poll storage poll = polls[_pollId];
-        require(!poll.isDeleted, "Poll has been deleted");
-        return poll.hasVoted[_voter];
+    function getVoters(uint256 _pollId) external view returns (address[] memory) {
+        require(_pollId < pollCount, "Poll does not exist");
+        require(msg.sender == polls[_pollId].creator, "Only creator can view voters");
+        return polls[_pollId].voters;
     }
 
-    function closePoll(uint256 _pollId) public {
-        Poll storage poll = polls[_pollId];
-        require(!poll.isDeleted, "Poll has been deleted");
-        require(msg.sender == poll.creator || msg.sender == owner(), "Not authorized");
-        require(poll.isActive, "Poll already closed");
-        
-        poll.isActive = false;
-        if (activePollCount > 0) {
-            activePollCount--;
-        }
-        
-        emit PollClosed(_pollId);
+    function hasVoted(uint256 _pollId, address _voter) external view returns (bool) {
+        require(_pollId < pollCount, "Poll does not exist");
+        return polls[_pollId].hasVoted[_voter];
     }
 
-    function withdrawTokens(uint256 amount) public onlyOwner {
-        require(rewardToken.transfer(owner(), amount), "Withdrawal failed");
+    function isWhitelisted(uint256 _pollId, address _voter) external view returns (bool) {
+        require(_pollId < pollCount, "Poll does not exist");
+        if (!polls[_pollId].hasWhitelist) return true;
+        return polls[_pollId].isWhitelisted[_voter];
     }
 } 

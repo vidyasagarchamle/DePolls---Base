@@ -26,10 +26,19 @@ import {
   IconButton,
   useColorModeValue,
   useColorMode,
+  ModalCloseButton,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  Spinner,
 } from '@chakra-ui/react';
-import { TimeIcon, DeleteIcon } from '@chakra-ui/icons';
+import { TimeIcon, DeleteIcon, ViewIcon } from '@chakra-ui/icons';
 import { useContractWrite, usePrepareContractWrite, useAccount, useWaitForTransaction } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
+import { ethers } from 'ethers';
 
 const Poll = ({ poll, onVote }) => {
   const [selectedOptions, setSelectedOptions] = useState([]);
@@ -37,6 +46,9 @@ const Poll = ({ poll, onVote }) => {
   const toast = useToast();
   const { address } = useAccount();
   const { colorMode } = useColorMode();
+  const [showVoters, setShowVoters] = useState(false);
+  const [voters, setVoters] = useState([]);
+  const [isLoadingVoters, setIsLoadingVoters] = useState(false);
 
   // Color mode values
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -242,138 +254,235 @@ const Poll = ({ poll, onVote }) => {
     return <Badge colorScheme="blue">Active</Badge>;
   };
 
+  // Add function to fetch voters
+  const fetchVoters = async () => {
+    if (!poll.isCreator) return;
+    
+    setIsLoadingVoters(true);
+    try {
+      const contract = new ethers.Contract(
+        POLLS_CONTRACT_ADDRESS,
+        DePollsABI,
+        new ethers.providers.Web3Provider(window.ethereum)
+      );
+      
+      const voterList = await contract.getVoters(poll.id);
+      setVoters(voterList);
+    } catch (error) {
+      console.error('Error fetching voters:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load voter information',
+        status: 'error',
+        duration: 5000,
+      });
+    } finally {
+      setIsLoadingVoters(false);
+    }
+  };
+
+  // Add handler for viewing voters
+  const handleViewVoters = () => {
+    setShowVoters(true);
+    fetchVoters();
+  };
+
   return (
-    <Box
-      borderWidth="1px"
-      borderRadius="xl"
-      p={6}
-      bg={bgColor}
-      borderColor={borderColor}
-      shadow="sm"
-      width="100%"
-      position="relative"
-      transition="all 0.2s"
-      _hover={{
-        transform: isAnyTransactionPending ? 'none' : 'translateY(-2px)',
-        shadow: 'md',
-        borderColor: 'brand.500',
-      }}
-    >
-      <VStack align="stretch" spacing={4}>
-        <HStack justify="space-between" align="flex-start">
-          <VStack align="start" spacing={1}>
-            <Heading size="md" color={textColor}>{poll.question}</Heading>
-            <HStack spacing={2}>
-              <TimeIcon color={mutedColor} />
-              <Text fontSize="sm" color={mutedColor}>
-                {getTimeLeft()}
-              </Text>
-              {getStatusBadge()}
-            </HStack>
-          </VStack>
-        </HStack>
+    <>
+      <Box
+        borderWidth="1px"
+        borderRadius="xl"
+        p={6}
+        bg={bgColor}
+        borderColor={borderColor}
+        shadow="sm"
+        width="100%"
+        position="relative"
+        transition="all 0.2s"
+        _hover={{
+          transform: isAnyTransactionPending ? 'none' : 'translateY(-2px)',
+          shadow: 'md',
+          borderColor: 'brand.500',
+        }}
+      >
+        <VStack align="stretch" spacing={4}>
+          <HStack justify="space-between" align="flex-start">
+            <VStack align="start" spacing={1}>
+              <Heading size="md" color={textColor}>{poll.question}</Heading>
+              <HStack spacing={2}>
+                <TimeIcon color={mutedColor} />
+                <Text fontSize="sm" color={mutedColor}>
+                  {getTimeLeft()}
+                </Text>
+                {getStatusBadge()}
+              </HStack>
+            </VStack>
+          </HStack>
 
-        <Box>
-          {poll.options.map((option, index) => {
-            const percentage = totalVotes > 0 ? (option.voteCount / totalVotes) * 100 : 0;
-            const isSelected = selectedOptions.includes(index);
+          <Box>
+            {poll.options.map((option, index) => {
+              const percentage = totalVotes > 0 ? (option.voteCount / totalVotes) * 100 : 0;
+              const isSelected = selectedOptions.includes(index);
 
-            return (
-              <Box
-                key={index}
-                mb={3}
-                p={3}
-                borderRadius="md"
-                bg={isSelected ? votedBgColor : 'transparent'}
-                borderWidth="1px"
-                borderColor={isSelected ? 'brand.500' : borderColor}
+              return (
+                <Box
+                  key={index}
+                  mb={3}
+                  p={3}
+                  borderRadius="md"
+                  bg={isSelected ? votedBgColor : 'transparent'}
+                  borderWidth="1px"
+                  borderColor={isSelected ? 'brand.500' : borderColor}
+                >
+                  {poll.hasVoted || isExpired || poll.isCreator ? (
+                    <VStack align="stretch" spacing={1}>
+                      <HStack justify="space-between">
+                        <Text color={textColor} fontWeight={isSelected ? 'medium' : 'normal'}>
+                          {option.text}
+                        </Text>
+                        <Text color={mutedColor} fontSize="sm">
+                          {option.voteCount} votes ({percentage.toFixed(1)}%)
+                        </Text>
+                      </HStack>
+                      <Progress
+                        value={percentage}
+                        size="sm"
+                        borderRadius="full"
+                        bg={progressBgColor}
+                        colorScheme="brand"
+                      />
+                    </VStack>
+                  ) : (
+                    <Box 
+                      onClick={() => !isAnyTransactionPending && handleOptionSelect(index)}
+                      cursor={isAnyTransactionPending ? 'not-allowed' : 'pointer'}
+                      width="100%"
+                    >
+                      {poll.isMultipleChoice ? (
+                        <Checkbox
+                          isChecked={selectedOptions.includes(index)}
+                          colorScheme="brand"
+                          isDisabled={isAnyTransactionPending}
+                          onChange={() => !isAnyTransactionPending && handleOptionSelect(index)}
+                          width="100%"
+                        >
+                          <Text color={textColor}>{option.text}</Text>
+                        </Checkbox>
+                      ) : (
+                        <Radio
+                          isChecked={selectedOptions.includes(index)}
+                          colorScheme="brand"
+                          isDisabled={isAnyTransactionPending}
+                          onChange={() => !isAnyTransactionPending && handleOptionSelect(index)}
+                          width="100%"
+                        >
+                          <Text color={textColor}>{option.text}</Text>
+                        </Radio>
+                      )}
+                    </Box>
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
+
+          {!poll.hasVoted && !isExpired && !poll.isCreator && (
+            <Button
+              onClick={handleVote}
+              isLoading={isVoteLoading}
+              loadingText="Submitting Vote..."
+              width="full"
+              isDisabled={isAnyTransactionPending || selectedOptions.length === 0}
+            >
+              Submit Vote
+            </Button>
+          )}
+
+          {poll.isCreator && poll.isActive && (
+            <HStack spacing={2} mt={4}>
+              <Button
+                leftIcon={<DeleteIcon />}
+                onClick={handleDelete}
+                colorScheme="red"
+                variant="ghost"
+                size="sm"
+                isLoading={isCloseLoading}
+                loadingText="Deleting..."
+                isDisabled={isAnyTransactionPending}
               >
-                {poll.hasVoted || isExpired || poll.isCreator ? (
-                  <VStack align="stretch" spacing={1}>
-                    <HStack justify="space-between">
-                      <Text color={textColor} fontWeight={isSelected ? 'medium' : 'normal'}>
-                        {option.text}
-                      </Text>
-                      <Text color={mutedColor} fontSize="sm">
-                        {option.voteCount} votes ({percentage.toFixed(1)}%)
-                      </Text>
-                    </HStack>
-                    <Progress
-                      value={percentage}
-                      size="sm"
-                      borderRadius="full"
-                      bg={progressBgColor}
-                      colorScheme="brand"
-                    />
-                  </VStack>
-                ) : (
-                  <Box 
-                    onClick={() => !isAnyTransactionPending && handleOptionSelect(index)}
-                    cursor={isAnyTransactionPending ? 'not-allowed' : 'pointer'}
-                    width="100%"
-                  >
-                    {poll.isMultipleChoice ? (
-                      <Checkbox
-                        isChecked={selectedOptions.includes(index)}
-                        colorScheme="brand"
-                        isDisabled={isAnyTransactionPending}
-                        onChange={() => !isAnyTransactionPending && handleOptionSelect(index)}
-                        width="100%"
-                      >
-                        <Text color={textColor}>{option.text}</Text>
-                      </Checkbox>
-                    ) : (
-                      <Radio
-                        isChecked={selectedOptions.includes(index)}
-                        colorScheme="brand"
-                        isDisabled={isAnyTransactionPending}
-                        onChange={() => !isAnyTransactionPending && handleOptionSelect(index)}
-                        width="100%"
-                      >
-                        <Text color={textColor}>{option.text}</Text>
-                      </Radio>
-                    )}
-                  </Box>
-                )}
-              </Box>
-            );
-          })}
-        </Box>
+                Delete Poll
+              </Button>
+              <Tooltip label="View Voters">
+                <IconButton
+                  icon={<ViewIcon />}
+                  onClick={handleViewVoters}
+                  variant="ghost"
+                  size="sm"
+                  isDisabled={isAnyTransactionPending}
+                />
+              </Tooltip>
+            </HStack>
+          )}
 
-        {!poll.hasVoted && !isExpired && !poll.isCreator && (
-          <Button
-            onClick={handleVote}
-            isLoading={isVoteLoading}
-            loadingText="Submitting Vote..."
-            width="full"
-            isDisabled={isAnyTransactionPending || selectedOptions.length === 0}
-          >
-            Submit Vote
-          </Button>
-        )}
+          {poll.hasVoted && (
+            <Alert status="success" borderRadius="md" bg={votedBgColor}>
+              <AlertIcon />
+              <Text color={textColor}>You have voted on this poll</Text>
+            </Alert>
+          )}
+        </VStack>
+      </Box>
 
-        {poll.isCreator && poll.isActive && (
-          <Button
-            leftIcon={<DeleteIcon />}
-            onClick={handleDelete}
-            colorScheme="red"
-            variant="ghost"
-            size="sm"
-            isLoading={isCloseLoading}
-            loadingText="Deleting..."
-            isDisabled={isAnyTransactionPending}
-          >
-            Delete Poll
-          </Button>
-        )}
-
-        {poll.hasVoted && (
-          <Alert status="success" borderRadius="md" bg={votedBgColor}>
-            <AlertIcon />
-            <Text color={textColor}>You have voted on this poll</Text>
-          </Alert>
-        )}
-      </VStack>
+      {/* Voters Modal */}
+      <Modal isOpen={showVoters} onClose={() => setShowVoters(false)} size="xl">
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent bg={bgColor}>
+          <ModalHeader color={textColor}>Poll Voters</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {isLoadingVoters ? (
+              <VStack py={8}>
+                <Spinner size="xl" color="brand.500" />
+                <Text color={textColor}>Loading voters...</Text>
+              </VStack>
+            ) : voters.length > 0 ? (
+              <Table variant="simple">
+                <Thead>
+                  <Tr>
+                    <Th color={textColor}>#</Th>
+                    <Th color={textColor}>Wallet Address</Th>
+                    {poll.hasWhitelist && <Th color={textColor}>Status</Th>}
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {voters.map((voter, index) => (
+                    <Tr key={voter}>
+                      <Td color={textColor}>{index + 1}</Td>
+                      <Td color={textColor}>
+                        <Text isTruncated maxW="300px">
+                          {voter}
+                        </Text>
+                      </Td>
+                      {poll.hasWhitelist && (
+                        <Td>
+                          <Badge colorScheme="green">Whitelisted</Badge>
+                        </Td>
+                      )}
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            ) : (
+              <Text color={textColor} textAlign="center" py={8}>
+                No votes recorded yet
+              </Text>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={() => setShowVoters(false)}>Close</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       <Modal isOpen={isOpen} onClose={onClose} closeOnOverlayClick={!isCloseLoading}>
         <ModalOverlay backdropFilter="blur(4px)" />
@@ -400,7 +509,7 @@ const Poll = ({ poll, onVote }) => {
           </ModalFooter>
         </ModalContent>
       </Modal>
-    </Box>
+    </>
   );
 };
 

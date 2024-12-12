@@ -20,9 +20,13 @@ import {
   useToast,
   useColorModeValue,
   Select,
+  Textarea,
+  Divider,
+  FormHelperText,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon } from '@chakra-ui/icons';
 import { useAccount, useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
+import { ethers } from 'ethers';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 
 const CreatePoll = ({ onPollCreated }) => {
@@ -32,7 +36,11 @@ const CreatePoll = ({ onPollCreated }) => {
   const [options, setOptions] = useState(['', '']);
   const [isMultipleChoice, setIsMultipleChoice] = useState(false);
   const [isWeighted, setIsWeighted] = useState(false);
-  const [duration, setDuration] = useState('7'); // Default 7 days
+  const [duration, setDuration] = useState('7');
+  const [hasWhitelist, setHasWhitelist] = useState(false);
+  const [whitelistAddresses, setWhitelistAddresses] = useState('');
+  const [rewardToken, setRewardToken] = useState('');
+  const [rewardAmount, setRewardAmount] = useState('');
   const toast = useToast();
 
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -46,12 +54,37 @@ const CreatePoll = ({ onPollCreated }) => {
   // Filter out empty options
   const validOptions = options.map(opt => opt.trim()).filter(opt => opt !== '');
 
+  // Parse whitelist addresses
+  const parseWhitelistAddresses = () => {
+    if (!hasWhitelist || !whitelistAddresses.trim()) return [];
+    return whitelistAddresses
+      .split('\n')
+      .map(addr => addr.trim())
+      .filter(addr => ethers.utils.isAddress(addr));
+  };
+
+  // Validate reward token address
+  const isValidRewardToken = rewardToken ? ethers.utils.isAddress(rewardToken) : true;
+  const rewardAmountWei = rewardAmount ? ethers.utils.parseEther(rewardAmount) : '0';
+
   const { config } = usePrepareContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'createPoll',
-    args: [question.trim(), validOptions, deadline, isWeighted, isMultipleChoice],
-    enabled: question.trim() !== '' && validOptions.length >= 2,
+    args: [
+      question.trim(),
+      validOptions,
+      deadline,
+      isWeighted,
+      isMultipleChoice,
+      hasWhitelist,
+      rewardToken || ethers.constants.AddressZero,
+      rewardAmountWei
+    ],
+    enabled: question.trim() !== '' && 
+             validOptions.length >= 2 && 
+             isValidRewardToken &&
+             (!hasWhitelist || parseWhitelistAddresses().length > 0),
   });
 
   const { write: createPoll, data, isLoading: isWriteLoading } = useContractWrite({
@@ -59,7 +92,7 @@ const CreatePoll = ({ onPollCreated }) => {
     onSuccess: () => {
       toast({
         title: 'Transaction Submitted',
-        description: `Your ${isMultipleChoice ? 'multiple choice ' : ''}poll is being created.`,
+        description: 'Your poll is being created.',
         status: 'info',
         duration: null,
         id: 'creating-poll',
@@ -72,7 +105,7 @@ const CreatePoll = ({ onPollCreated }) => {
 
   const { isLoading: isWaitLoading } = useWaitForTransaction({
     hash: data?.hash,
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.close('creating-poll');
       toast({
         title: 'Success!',
@@ -80,12 +113,18 @@ const CreatePoll = ({ onPollCreated }) => {
         status: 'success',
         duration: 5000,
       });
+
+      // If whitelist is enabled, update the whitelist
+      if (hasWhitelist) {
+        const addresses = parseWhitelistAddresses();
+        // Note: You'll need to implement the whitelist update call here
+      }
+
       resetForm();
       if (onPollCreated) {
         onPollCreated();
         setTimeout(() => onPollCreated(), 1000);
         setTimeout(() => onPollCreated(), 3000);
-        setTimeout(() => onPollCreated(), 5000);
       }
     },
     onError: () => {
@@ -107,6 +146,10 @@ const CreatePoll = ({ onPollCreated }) => {
     setIsMultipleChoice(false);
     setIsWeighted(false);
     setDuration('7');
+    setHasWhitelist(false);
+    setWhitelistAddresses('');
+    setRewardToken('');
+    setRewardAmount('');
     onClose();
   };
 
@@ -130,6 +173,8 @@ const CreatePoll = ({ onPollCreated }) => {
 
   const handleSubmit = () => {
     if (!createPoll || isLoading) return;
+    
+    // Validation
     if (question.trim() === '') {
       toast({
         title: 'Error',
@@ -139,6 +184,7 @@ const CreatePoll = ({ onPollCreated }) => {
       });
       return;
     }
+
     if (validOptions.length < 2) {
       toast({
         title: 'Error',
@@ -189,7 +235,7 @@ const CreatePoll = ({ onPollCreated }) => {
       </Text>
       <Button onClick={onOpen} isDisabled={isLoading}>Create Poll</Button>
 
-      <Modal isOpen={isOpen} onClose={onClose}>
+      <Modal isOpen={isOpen} onClose={onClose} size="xl">
         <ModalOverlay backdropFilter="blur(4px)" />
         <ModalContent bg={bgColor} borderRadius="xl">
           <ModalHeader color={textColor}>Create New Poll</ModalHeader>
@@ -286,12 +332,84 @@ const CreatePoll = ({ onPollCreated }) => {
                 />
               </FormControl>
 
+              <Divider />
+
+              <FormControl display="flex" alignItems="center">
+                <FormLabel mb="0" color={textColor}>Enable Whitelist</FormLabel>
+                <Switch
+                  colorScheme="brand"
+                  isChecked={hasWhitelist}
+                  onChange={(e) => setHasWhitelist(e.target.checked)}
+                  isDisabled={isLoading}
+                />
+              </FormControl>
+
+              {hasWhitelist && (
+                <FormControl>
+                  <FormLabel color={textColor}>Whitelist Addresses</FormLabel>
+                  <Textarea
+                    placeholder="Enter addresses (one per line)"
+                    value={whitelistAddresses}
+                    onChange={(e) => setWhitelistAddresses(e.target.value)}
+                    bg={bgColor}
+                    color={textColor}
+                    isDisabled={isLoading}
+                    minH="100px"
+                  />
+                  <FormHelperText>
+                    Enter Ethereum addresses, one per line
+                  </FormHelperText>
+                </FormControl>
+              )}
+
+              <Divider />
+
+              <FormControl>
+                <FormLabel color={textColor}>Reward Token (Optional)</FormLabel>
+                <Input
+                  placeholder="Enter reward token address"
+                  value={rewardToken}
+                  onChange={(e) => setRewardToken(e.target.value)}
+                  bg={bgColor}
+                  color={textColor}
+                  isDisabled={isLoading}
+                />
+                <FormHelperText>
+                  Leave empty for no rewards
+                </FormHelperText>
+              </FormControl>
+
+              {rewardToken && (
+                <FormControl>
+                  <FormLabel color={textColor}>Reward Amount</FormLabel>
+                  <Input
+                    placeholder="Enter reward amount"
+                    value={rewardAmount}
+                    onChange={(e) => setRewardAmount(e.target.value)}
+                    bg={bgColor}
+                    color={textColor}
+                    isDisabled={isLoading}
+                    type="number"
+                    step="0.000000000000000001"
+                  />
+                  <FormHelperText>
+                    Amount of tokens to reward per vote
+                  </FormHelperText>
+                </FormControl>
+              )}
+
               <Button
                 width="full"
                 onClick={handleSubmit}
                 isLoading={isLoading}
                 loadingText="Creating Poll..."
-                isDisabled={isLoading || !question.trim() || validOptions.length < 2}
+                isDisabled={
+                  isLoading || 
+                  !question.trim() || 
+                  validOptions.length < 2 ||
+                  (hasWhitelist && parseWhitelistAddresses().length === 0) ||
+                  (rewardToken && !isValidRewardToken)
+                }
               >
                 Create Poll
               </Button>
