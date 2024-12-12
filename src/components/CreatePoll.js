@@ -58,27 +58,30 @@ const CreatePoll = ({ onPollCreated }) => {
   // Prepare contract arguments
   const getContractArgs = () => {
     const validOptions = options.filter(opt => opt.trim() !== '');
-    const validAddresses = hasWhitelist 
-      ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr))
-      : [];
-
     return [
       question,
       validOptions,
       getDeadlineTimestamp(),
       isMultipleChoice,
       hasWhitelist,
-      validAddresses,
+      hasWhitelist ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr)) : []
     ];
   };
 
   // Check if form is valid
   const isFormValid = () => {
-    return Boolean(
-      question.trim() && 
-      options.filter(opt => opt.trim() !== '').length >= 2 &&
-      getDeadlineTimestamp() > Math.floor(Date.now() / 1000) &&
-      (!hasWhitelist || !whitelistedAddresses.some(addr => addr.trim()) || whitelistedAddresses.some(addr => ethers.utils.isAddress(addr)))
+    const validOptions = options.filter(opt => opt.trim() !== '');
+    console.log('Form validation:', {
+      question: question.trim(),
+      validOptionsLength: validOptions.length,
+      deadline: getDeadlineTimestamp(),
+      currentTime: Math.floor(Date.now() / 1000)
+    });
+    
+    return (
+      question.trim().length > 0 && 
+      validOptions.length >= 2 &&
+      getDeadlineTimestamp() > Math.floor(Date.now() / 1000)
     );
   };
 
@@ -89,9 +92,6 @@ const CreatePoll = ({ onPollCreated }) => {
     functionName: 'createPoll',
     args: getContractArgs(),
     enabled: isFormValid(),
-    onError: (error) => {
-      console.error('Prepare error:', error);
-    }
   });
 
   const { write: createPoll, data: createData, isLoading: isCreating } = useContractWrite({
@@ -150,6 +150,8 @@ const CreatePoll = ({ onPollCreated }) => {
     },
   });
 
+  const isLoading = isCreating || isWaitingCreate;
+
   const handleAddOption = () => {
     if (options.length >= 5) return;
     setOptions(prev => [...prev, '']);
@@ -191,8 +193,8 @@ const CreatePoll = ({ onPollCreated }) => {
   };
 
   const handleCreatePoll = async () => {
-    const errors = validateForm();
-    if (errors.length > 0) {
+    if (!isFormValid()) {
+      const errors = validateForm();
       toast({
         title: 'Validation Error',
         description: errors.join('\n'),
@@ -204,9 +206,6 @@ const CreatePoll = ({ onPollCreated }) => {
     }
 
     try {
-      if (!createPoll) {
-        throw new Error('Create poll function not available');
-      }
       console.log('Creating poll with args:', getContractArgs());
       await createPoll?.();
     } catch (error) {
@@ -219,8 +218,6 @@ const CreatePoll = ({ onPollCreated }) => {
       });
     }
   };
-
-  const isLoading = isCreating || isWaitingCreate;
 
   // Log current form state for debugging
   console.log('Form state:', {

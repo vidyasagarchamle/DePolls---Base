@@ -26,9 +26,13 @@ const { publicClient, webSocketPublicClient } = configureChains(
     publicProvider()
   ],
   {
-    pollingInterval: 5000,
-    stallTimeout: 5000,
-    retryCount: 3,
+    pollingInterval: 2000,
+    stallTimeout: 2000,
+    retryCount: 5,
+    retryDelay: 1000,
+    batch: {
+      multicall: true
+    }
   }
 );
 
@@ -38,6 +42,7 @@ const wagmiConfig = createConfig({
   publicClient,
   webSocketPublicClient,
   syncConnectedChain: true,
+  persister: null,
 });
 
 const ethereumClient = new EthereumClient(wagmiConfig, chains);

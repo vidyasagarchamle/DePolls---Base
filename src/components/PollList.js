@@ -75,44 +75,76 @@ const PollList = () => {
     if (!publicClient) return null;
 
     try {
-      const contract = new ethers.Contract(
-        POLLS_CONTRACT_ADDRESS,
-        DePollsABI,
-        publicClient
-      );
+      console.log(`Fetching poll ${pollId}...`);
+      
+      // Get poll data using contract calls
+      const pollData = await publicClient.readContract({
+        address: POLLS_CONTRACT_ADDRESS,
+        abi: DePollsABI,
+        functionName: 'polls',
+        args: [pollId]
+      });
 
-      // Get poll data
-      const [poll, options, hasVoted, isWhitelisted] = await Promise.all([
-        contract.polls(pollId),
-        contract.getPollOptions(pollId),
-        address ? contract.hasVoted(pollId, address) : false,
-        address ? contract.isWhitelisted(pollId, address) : false
-      ]);
+      console.log(`Poll ${pollId} data:`, pollData);
 
-      if (!poll || !poll.creator || poll.creator === ethers.constants.AddressZero) {
+      if (!pollData || !pollData.creator || pollData.creator === '0x0000000000000000000000000000000000000000') {
         console.log(`Invalid poll data for ID ${pollId}`);
         return null;
       }
 
-      const isCreator = address && poll.creator.toLowerCase() === address.toLowerCase();
+      // Get options
+      const options = await publicClient.readContract({
+        address: POLLS_CONTRACT_ADDRESS,
+        abi: DePollsABI,
+        functionName: 'getPollOptions',
+        args: [pollId]
+      });
 
-      return {
+      console.log(`Poll ${pollId} options:`, options);
+
+      // Get voting status if user is connected
+      let hasVoted = false;
+      let isWhitelisted = false;
+      
+      if (address) {
+        [hasVoted, isWhitelisted] = await Promise.all([
+          publicClient.readContract({
+            address: POLLS_CONTRACT_ADDRESS,
+            abi: DePollsABI,
+            functionName: 'hasVoted',
+            args: [pollId, address]
+          }),
+          publicClient.readContract({
+            address: POLLS_CONTRACT_ADDRESS,
+            abi: DePollsABI,
+            functionName: 'isWhitelisted',
+            args: [pollId, address]
+          })
+        ]);
+      }
+
+      const isCreator = address && pollData.creator.toLowerCase() === address.toLowerCase();
+
+      const poll = {
         id: pollId,
-        question: poll.question,
-        creator: poll.creator,
-        deadline: poll.deadline.toNumber(),
-        isMultipleChoice: poll.isMultipleChoice,
-        isActive: poll.isActive,
-        hasWhitelist: poll.hasWhitelist,
+        question: pollData.question,
+        creator: pollData.creator,
+        deadline: Number(pollData.deadline),
+        isMultipleChoice: pollData.isMultipleChoice,
+        isActive: pollData.isActive,
+        hasWhitelist: pollData.hasWhitelist,
         options: options.map((opt) => ({
           text: opt.text,
-          voteCount: opt.voteCount.toNumber(),
+          voteCount: Number(opt.voteCount)
         })),
         hasVoted,
         isCreator,
         isWhitelisted,
-        totalVotes: options.reduce((acc, opt) => acc + opt.voteCount.toNumber(), 0)
+        totalVotes: options.reduce((acc, opt) => acc + Number(opt.voteCount), 0)
       };
+
+      console.log(`Processed poll ${pollId}:`, poll);
+      return poll;
     } catch (error) {
       console.error(`Error fetching poll ${pollId}:`, error);
       return null;
@@ -129,7 +161,7 @@ const PollList = () => {
     setPolls([]); // Clear existing polls before fetching
     
     try {
-      const count = parseInt(pollCount.toString());
+      const count = Number(pollCount);
       console.log('Fetching polls with count:', count);
 
       if (count === 0) {
@@ -146,7 +178,7 @@ const PollList = () => {
       const results = await Promise.all(pollPromises);
       const validPolls = results.filter(poll => poll !== null);
       
-      console.log('Fetched polls:', validPolls);
+      console.log('All fetched polls:', validPolls);
       setPolls(validPolls);
     } catch (error) {
       console.error('Error fetching polls:', error);
@@ -163,6 +195,7 @@ const PollList = () => {
 
   // Reset polls when address changes
   useEffect(() => {
+    console.log('Address changed, resetting polls');
     setPolls([]);
   }, [address]);
 
