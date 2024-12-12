@@ -57,9 +57,16 @@ const CreatePoll = ({ onPollCreated }) => {
     return BigInt(Math.max(deadlineDate, currentTime + 300)); // At least 5 minutes in the future
   };
 
+  // Get valid options (non-empty and unique)
+  const getValidOptions = () => {
+    const trimmedOptions = options.map(opt => opt.trim());
+    const uniqueOptions = [...new Set(trimmedOptions)].filter(opt => opt !== '');
+    return uniqueOptions;
+  };
+
   // Prepare contract arguments
   const getContractArgs = () => {
-    const validOptions = options.filter(opt => opt.trim() !== '');
+    const validOptions = getValidOptions();
     const validAddresses = hasWhitelist 
       ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr))
       : [];
@@ -87,19 +94,24 @@ const CreatePoll = ({ onPollCreated }) => {
 
   // Check if form is valid
   const isFormValid = () => {
-    const validOptions = options.filter(opt => opt.trim() !== '');
+    const validOptions = getValidOptions();
     const validAddresses = hasWhitelist 
       ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr))
       : [];
     const currentTime = BigInt(Math.floor(Date.now() / 1000));
     const deadlineTime = getDeadlineTimestamp();
 
+    // Check for duplicate options
+    const hasDuplicateOptions = options.map(opt => opt.trim()).filter(opt => opt !== '').length !== validOptions.length;
+
     // Log individual validations
     console.log('Validation checks:', {
       question: question.trim(),
       questionLength: question.trim().length,
+      rawOptions: options.map(opt => opt.trim()),
       validOptions,
       validOptionsCount: validOptions.length,
+      hasDuplicateOptions,
       deadline: deadline,
       deadlineTime: deadlineTime.toString(),
       currentTime: currentTime.toString(),
@@ -111,10 +123,42 @@ const CreatePoll = ({ onPollCreated }) => {
     const isValid = 
       question.trim().length > 0 && 
       validOptions.length >= 2 &&
+      !hasDuplicateOptions &&
       deadlineTime > currentTime &&
       (!hasWhitelist || validAddresses.length > 0);
 
     return isValid;
+  };
+
+  const validateForm = () => {
+    const errors = [];
+    const validOptions = getValidOptions();
+    const currentTime = BigInt(Math.floor(Date.now() / 1000));
+    const deadlineTime = getDeadlineTimestamp();
+
+    if (!question.trim()) {
+      errors.push("Question is required");
+    }
+
+    if (validOptions.length < 2) {
+      errors.push("At least 2 different options are required");
+    }
+
+    if (options.map(opt => opt.trim()).filter(opt => opt !== '').length !== validOptions.length) {
+      errors.push("Options must be unique");
+    }
+
+    if (!deadline) {
+      errors.push("Deadline is required");
+    } else if (deadlineTime <= currentTime) {
+      errors.push("Deadline must be in the future");
+    }
+
+    if (hasWhitelist && whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr)).length === 0) {
+      errors.push("At least one valid address is required for whitelist");
+    }
+
+    return errors;
   };
 
   // Contract interaction setup
@@ -145,7 +189,9 @@ const CreatePoll = ({ onPollCreated }) => {
       } else if (error.message.includes("Question cannot be empty")) {
         errorMessage = "Question cannot be empty";
       } else if (error.message.includes("At least 2 options required")) {
-        errorMessage = "At least 2 options are required";
+        errorMessage = "At least 2 different options are required";
+      } else if (error.message.includes("execution reverted")) {
+        errorMessage = "Invalid poll data. Please check all fields and try again.";
       }
       toast({
         title: 'Error',
@@ -215,19 +261,6 @@ const CreatePoll = ({ onPollCreated }) => {
 
   const handleWhitelistAddressChange = (index, value) => {
     setWhitelistedAddresses(prev => prev.map((addr, i) => i === index ? value : addr));
-  };
-
-  const validateForm = () => {
-    const errors = [];
-    if (!question.trim()) errors.push("Question is required");
-    if (options.filter(opt => opt.trim() !== '').length < 2) errors.push("At least 2 options are required");
-    if (!deadline) {
-      errors.push("Deadline is required");
-    } else {
-      const deadlineDate = new Date(deadline).getTime();
-      if (deadlineDate <= Date.now()) errors.push("Deadline must be in the future");
-    }
-    return errors;
   };
 
   const handleCreatePoll = async () => {
