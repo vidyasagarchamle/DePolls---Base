@@ -12,14 +12,10 @@ import {
   Card,
   CardHeader,
   Heading,
-  Flex,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  IconButton,
+  Alert,
+  AlertIcon,
 } from '@chakra-ui/react';
-import { RepeatIcon, ChevronDownIcon } from '@chakra-ui/icons';
+import { RepeatIcon } from '@chakra-ui/icons';
 import { useContractRead, useAccount, usePublicClient } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import Poll from './Poll';
@@ -28,14 +24,12 @@ import CreatePoll from './CreatePoll';
 const PollList = () => {
   const [polls, setPolls] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [filter, setFilter] = useState('all');
   const toast = useToast();
   const { address } = useAccount();
   const publicClient = usePublicClient();
 
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.100', 'gray.700');
-  const accentColor = useColorModeValue('brand.500', 'brand.300');
 
   // Get poll count
   const { data: pollCount, refetch: refetchPollCount } = useContractRead({
@@ -43,6 +37,9 @@ const PollList = () => {
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
+    onError: (error) => {
+      console.error('Error fetching poll count:', error);
+    },
   });
 
   const fetchPollDetails = useCallback(async (pollId) => {
@@ -78,8 +75,8 @@ const PollList = () => {
 
       // Get voting status if user is connected
       let hasVoted = false;
-      let isWhitelisted = true; // Default to true if no whitelist
-
+      let isWhitelisted = false;
+      
       if (address) {
         try {
           [hasVoted, isWhitelisted] = await Promise.all([
