@@ -8,34 +8,19 @@ import {
   Spinner,
   Center,
   useColorModeValue,
-  HStack,
-  Select,
-  IconButton,
-  Badge,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
   Container,
   Card,
-  CardBody,
   CardHeader,
   Heading,
   Flex,
-  Spacer,
-  Tag,
-  TagLeftIcon,
-  TagLabel,
   Menu,
   MenuButton,
   MenuList,
   MenuItem,
-  Tooltip,
-  Divider,
+  IconButton,
 } from '@chakra-ui/react';
 import { RepeatIcon, ChevronDownIcon } from '@chakra-ui/icons';
-import { useContractRead, useAccount, useContractWrite, useWaitForTransaction, usePublicClient } from 'wagmi';
-import { ethers } from 'ethers';
+import { useContractRead, useAccount, usePublicClient } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import Poll from './Poll';
 import CreatePoll from './CreatePoll';
@@ -45,12 +30,10 @@ const PollList = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState('all');
   const toast = useToast();
-  const { address, isConnecting } = useAccount();
+  const { address } = useAccount();
   const publicClient = usePublicClient();
 
   const bgColor = useColorModeValue('white', 'gray.800');
-  const textColor = useColorModeValue('gray.800', 'white');
-  const mutedColor = useColorModeValue('gray.600', 'gray.400');
   const borderColor = useColorModeValue('gray.100', 'gray.700');
   const accentColor = useColorModeValue('brand.500', 'brand.300');
 
@@ -60,15 +43,6 @@ const PollList = () => {
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
-    onError: (error) => {
-      console.error('Error fetching poll count:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch poll count. Please try again.',
-        status: 'error',
-        duration: 5000,
-      });
-    },
   });
 
   const fetchPollDetails = useCallback(async (pollId) => {
@@ -82,7 +56,7 @@ const PollList = () => {
         address: POLLS_CONTRACT_ADDRESS,
         abi: DePollsABI,
         functionName: 'polls',
-        args: [pollId]
+        args: [BigInt(pollId)]
       });
 
       console.log(`Poll ${pollId} data:`, pollData);
@@ -97,30 +71,34 @@ const PollList = () => {
         address: POLLS_CONTRACT_ADDRESS,
         abi: DePollsABI,
         functionName: 'getPollOptions',
-        args: [pollId]
+        args: [BigInt(pollId)]
       });
 
       console.log(`Poll ${pollId} options:`, options);
 
       // Get voting status if user is connected
       let hasVoted = false;
-      let isWhitelisted = false;
-      
+      let isWhitelisted = true; // Default to true if no whitelist
+
       if (address) {
-        [hasVoted, isWhitelisted] = await Promise.all([
-          publicClient.readContract({
-            address: POLLS_CONTRACT_ADDRESS,
-            abi: DePollsABI,
-            functionName: 'hasVoted',
-            args: [pollId, address]
-          }),
-          publicClient.readContract({
-            address: POLLS_CONTRACT_ADDRESS,
-            abi: DePollsABI,
-            functionName: 'isWhitelisted',
-            args: [pollId, address]
-          })
-        ]);
+        try {
+          [hasVoted, isWhitelisted] = await Promise.all([
+            publicClient.readContract({
+              address: POLLS_CONTRACT_ADDRESS,
+              abi: DePollsABI,
+              functionName: 'hasVoted',
+              args: [BigInt(pollId), address]
+            }),
+            publicClient.readContract({
+              address: POLLS_CONTRACT_ADDRESS,
+              abi: DePollsABI,
+              functionName: 'isWhitelisted',
+              args: [BigInt(pollId), address]
+            })
+          ]);
+        } catch (error) {
+          console.warn(`Error fetching vote status for poll ${pollId}:`, error);
+        }
       }
 
       const isCreator = address && pollData.creator.toLowerCase() === address.toLowerCase();
@@ -169,14 +147,18 @@ const PollList = () => {
         return;
       }
 
-      // Fetch all polls in parallel
-      const pollPromises = [];
+      // Fetch polls sequentially to avoid rate limiting
+      const validPolls = [];
       for (let i = count - 1; i >= 0; i--) {
-        pollPromises.push(fetchPollDetails(i));
+        try {
+          const poll = await fetchPollDetails(i);
+          if (poll) {
+            validPolls.push(poll);
+          }
+        } catch (error) {
+          console.error(`Error fetching poll ${i}:`, error);
+        }
       }
-
-      const results = await Promise.all(pollPromises);
-      const validPolls = results.filter(poll => poll !== null);
       
       console.log('All fetched polls:', validPolls);
       setPolls(validPolls);
@@ -193,12 +175,6 @@ const PollList = () => {
     }
   }, [pollCount, publicClient, fetchPollDetails, toast]);
 
-  // Reset polls when address changes
-  useEffect(() => {
-    console.log('Address changed, resetting polls');
-    setPolls([]);
-  }, [address]);
-
   // Fetch polls when pollCount or address changes
   useEffect(() => {
     if (pollCount && publicClient) {
@@ -209,7 +185,7 @@ const PollList = () => {
 
   // Filter polls
   const filterPolls = useCallback((polls) => {
-    const now = Date.now() / 1000; // Convert to seconds to match contract timestamp
+    const now = Math.floor(Date.now() / 1000);
     
     return polls.filter(poll => {
       if (poll.hasWhitelist && !poll.isWhitelisted && !poll.isCreator) {
@@ -275,67 +251,34 @@ const PollList = () => {
               </MenuList>
             </Menu>
 
-            <Tag colorScheme="brand" borderRadius="full" size="md">
-              <TagLabel>{filteredPolls.length} poll{filteredPolls.length !== 1 ? 's' : ''}</TagLabel>
-            </Tag>
-
-            <Spacer />
-
-            <Tooltip label="Refresh Polls">
-              <IconButton
-                icon={<RepeatIcon />}
-                onClick={handleRefresh}
-                variant="ghost"
-                colorScheme="brand"
-                isLoading={isLoading}
-                borderRadius="xl"
-                size="md"
-              />
-            </Tooltip>
+            <IconButton
+              icon={<RepeatIcon />}
+              onClick={handleRefresh}
+              variant="ghost"
+              borderRadius="xl"
+              isLoading={isLoading}
+              aria-label="Refresh polls"
+            />
           </Flex>
         </CardHeader>
 
-        <CardBody>
-          {isLoading && polls.length === 0 ? (
-            <Center py={10}>
-              <VStack spacing={4}>
-                <Spinner size="xl" color="brand.500" thickness="3px" speed="0.8s" />
-                <Text color={textColor}>Loading polls...</Text>
-              </VStack>
+        <Box p={6}>
+          {isLoading ? (
+            <Center py={8}>
+              <Spinner size="xl" color="brand.500" thickness="4px" />
             </Center>
           ) : filteredPolls.length > 0 ? (
-            <VStack spacing={6} align="stretch">
+            <VStack spacing={4} align="stretch">
               {filteredPolls.map((poll) => (
-                <Poll
-                  key={poll.id}
-                  poll={poll}
-                  onVote={handleRefresh}
-                  onClose={handleRefresh}
-                />
+                <Poll key={poll.id} poll={poll} onVote={handleRefresh} onClose={handleRefresh} />
               ))}
             </VStack>
           ) : (
-            <Alert
-              status="info"
-              variant="subtle"
-              flexDirection="column"
-              alignItems="center"
-              justifyContent="center"
-              textAlign="center"
-              height="200px"
-              bg={bgColor}
-              borderRadius="2xl"
-            >
-              <AlertIcon boxSize="40px" mr={0} />
-              <AlertTitle mt={4} mb={1} fontSize="lg">
-                No Polls Found
-              </AlertTitle>
-              <AlertDescription maxWidth="sm">
-                {address ? "Create a new poll to get started!" : "Connect your wallet to view polls"}
-              </AlertDescription>
-            </Alert>
+            <Center py={8}>
+              <Text>No polls found</Text>
+            </Center>
           )}
-        </CardBody>
+        </Box>
       </Card>
     </Container>
   );

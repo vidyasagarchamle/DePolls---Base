@@ -51,38 +51,57 @@ const CreatePoll = ({ onPollCreated }) => {
 
   // Calculate deadline timestamp
   const getDeadlineTimestamp = () => {
-    if (!deadline) return 0;
-    return Math.floor(new Date(deadline).getTime() / 1000);
+    if (!deadline) return BigInt(0);
+    return BigInt(Math.floor(new Date(deadline).getTime() / 1000));
   };
 
   // Prepare contract arguments
   const getContractArgs = () => {
     const validOptions = options.filter(opt => opt.trim() !== '');
+    const validAddresses = hasWhitelist 
+      ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr))
+      : [];
+
+    console.log('Contract args:', {
+      question,
+      validOptions,
+      deadline: getDeadlineTimestamp(),
+      isMultipleChoice,
+      hasWhitelist,
+      validAddresses
+    });
+
     return [
       question,
       validOptions,
       getDeadlineTimestamp(),
       isMultipleChoice,
       hasWhitelist,
-      hasWhitelist ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr)) : []
+      validAddresses,
     ];
   };
 
   // Check if form is valid
   const isFormValid = () => {
     const validOptions = options.filter(opt => opt.trim() !== '');
-    console.log('Form validation:', {
-      question: question.trim(),
-      validOptionsLength: validOptions.length,
-      deadline: getDeadlineTimestamp(),
-      currentTime: Math.floor(Date.now() / 1000)
-    });
-    
-    return (
-      question.trim().length > 0 && 
+    const currentTime = BigInt(Math.floor(Date.now() / 1000));
+    const deadlineTime = getDeadlineTimestamp();
+
+    const isValid = Boolean(
+      question.trim() && 
       validOptions.length >= 2 &&
-      getDeadlineTimestamp() > Math.floor(Date.now() / 1000)
+      deadlineTime > currentTime
     );
+
+    console.log('Form validation:', {
+      hasQuestion: Boolean(question.trim()),
+      validOptionsCount: validOptions.length,
+      deadline: deadlineTime.toString(),
+      currentTime: currentTime.toString(),
+      isValid
+    });
+
+    return isValid;
   };
 
   // Contract interaction setup
@@ -224,7 +243,7 @@ const CreatePoll = ({ onPollCreated }) => {
     isValid: isFormValid(),
     hasQuestion: Boolean(question.trim()),
     hasValidOptions: options.filter(opt => opt.trim() !== '').length >= 2,
-    hasValidDeadline: getDeadlineTimestamp() > Math.floor(Date.now() / 1000),
+    hasValidDeadline: getDeadlineTimestamp() > BigInt(Math.floor(Date.now() / 1000)),
     canCreatePoll: Boolean(createPoll),
     contractArgs: getContractArgs(),
   });
