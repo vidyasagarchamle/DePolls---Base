@@ -169,6 +169,58 @@ const Poll = ({ poll, onVote }) => {
   const isCloseLoading = isClosing || isWaitingClose;
   const isAnyTransactionPending = isVoteLoading || isCloseLoading;
 
+  // Add reward claiming functionality
+  const { config: claimConfig } = usePrepareContractWrite({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'claimReward',
+    args: [poll.id],
+    enabled: poll.hasVoted && 
+            poll.rewardToken !== ethers.constants.AddressZero && 
+            poll.rewardAmount.gt(0),
+  });
+
+  const { write: claimReward, isLoading: isClaimLoading, data: claimData } = useContractWrite({
+    ...claimConfig,
+    onSuccess: () => {
+      toast({
+        title: 'Claiming Reward',
+        description: 'Your reward claim is being processed.',
+        status: 'info',
+        duration: null,
+        id: 'claiming-reward',
+      });
+    },
+  });
+
+  const { isLoading: isWaitingClaim } = useWaitForTransaction({
+    hash: claimData?.hash,
+    onSuccess: () => {
+      toast.close('claiming-reward');
+      toast({
+        title: 'Success!',
+        description: 'Reward claimed successfully.',
+        status: 'success',
+        duration: 5000,
+      });
+      if (onVote) {
+        onVote();
+      }
+    },
+    onError: () => {
+      toast.close('claiming-reward');
+      toast({
+        title: 'Error',
+        description: 'Failed to claim reward. Please try again.',
+        status: 'error',
+        duration: 5000,
+      });
+    },
+  });
+
+  const isClaimingReward = isClaimLoading || isWaitingClaim;
+  const isAnyTransactionPending = isVoteLoading || isCloseLoading || isClaimingReward;
+
   const handleDelete = () => {
     onOpen();
   };
@@ -287,6 +339,31 @@ const Poll = ({ poll, onVote }) => {
     fetchVoters();
   };
 
+  // Add reward info display
+  const renderRewardInfo = () => {
+    if (poll.rewardToken === ethers.constants.AddressZero) return null;
+
+    return (
+      <HStack spacing={2} mt={2}>
+        <Text color={mutedColor} fontSize="sm">
+          Reward: {ethers.utils.formatEther(poll.rewardAmount)} tokens
+        </Text>
+        {poll.hasVoted && !isExpired && (
+          <Button
+            size="sm"
+            colorScheme="yellow"
+            onClick={() => claimReward?.()}
+            isLoading={isClaimingReward}
+            loadingText="Claiming..."
+            isDisabled={isAnyTransactionPending}
+          >
+            Claim Reward
+          </Button>
+        )}
+      </HStack>
+    );
+  };
+
   return (
     <>
       <Box
@@ -316,6 +393,7 @@ const Poll = ({ poll, onVote }) => {
                 </Text>
                 {getStatusBadge()}
               </HStack>
+              {renderRewardInfo()}
             </VStack>
           </HStack>
 

@@ -8,7 +8,6 @@ import {
   Alert,
   AlertIcon,
   Heading,
-  SimpleGrid,
   HStack,
   Badge,
   Center,
@@ -18,9 +17,11 @@ import {
   Tab,
   TabPanel,
   useColorModeValue,
-  Divider,
   Box,
+  Tooltip,
+  Icon,
 } from '@chakra-ui/react';
+import { LockIcon, StarIcon } from '@chakra-ui/icons';
 import { useContractRead, useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
@@ -157,6 +158,33 @@ function PollList() {
     await fetchPolls();
   };
 
+  const renderPollStatus = (poll) => {
+    return (
+      <HStack spacing={2}>
+        {poll.hasWhitelist && (
+          <Tooltip label="Whitelisted Poll">
+            <Badge colorScheme="purple">
+              <HStack spacing={1}>
+                <Icon as={LockIcon} />
+                <Text>Whitelisted</Text>
+              </HStack>
+            </Badge>
+          </Tooltip>
+        )}
+        {poll.rewardToken !== ethers.constants.AddressZero && (
+          <Tooltip label={`Reward: ${ethers.utils.formatEther(poll.rewardAmount)} tokens`}>
+            <Badge colorScheme="yellow">
+              <HStack spacing={1}>
+                <Icon as={StarIcon} />
+                <Text>Rewards</Text>
+              </HStack>
+            </Badge>
+          </Tooltip>
+        )}
+      </HStack>
+    );
+  };
+
   // Render loading state
   if (loading) {
     return (
@@ -215,7 +243,7 @@ function PollList() {
     <Container maxW={containerWidth} py={8}>
       <CreatePoll onPollCreated={handlePollUpdate} />
       <Tabs variant="enclosed" colorScheme="brand" mt={8}>
-        <TabList bg={tabBg} borderRadius="xl" p={2}>
+        <TabList bg={useColorModeValue('white', 'gray.800')} borderRadius="xl" p={2}>
           <Tab _selected={{ bg: 'brand.500', color: 'white' }}>
             Active Polls ({activePolls.length})
           </Tab>
@@ -246,7 +274,10 @@ function PollList() {
                 </Alert>
               ) : (
                 activePolls.map(poll => (
-                  <Poll key={poll.id} poll={poll} onVote={handlePollUpdate} />
+                  <Box key={poll.id}>
+                    {renderPollStatus(poll)}
+                    <Poll poll={poll} onVote={handlePollUpdate} />
+                  </Box>
                 ))
               )}
             </VStack>
@@ -278,7 +309,10 @@ function PollList() {
                       <Heading size="md" mb={4} color={useColorModeValue('gray.800', 'white')}>Active</Heading>
                       <VStack spacing={4} align="stretch">
                         {activeMyPolls.map(poll => (
-                          <Poll key={poll.id} poll={poll} onVote={handlePollUpdate} />
+                          <Box key={poll.id}>
+                            {renderPollStatus(poll)}
+                            <Poll poll={poll} onVote={handlePollUpdate} />
+                          </Box>
                         ))}
                       </VStack>
                     </Box>
@@ -288,7 +322,10 @@ function PollList() {
                       <Heading size="md" mb={4} color={useColorModeValue('gray.800', 'white')}>Closed</Heading>
                       <VStack spacing={4} align="stretch">
                         {closedMyPolls.map(poll => (
-                          <Poll key={poll.id} poll={poll} onVote={handlePollUpdate} />
+                          <Box key={poll.id}>
+                            {renderPollStatus(poll)}
+                            <Poll poll={poll} onVote={handlePollUpdate} />
+                          </Box>
                         ))}
                       </VStack>
                     </Box>
