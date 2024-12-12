@@ -65,7 +65,7 @@ const CreatePoll = ({ onPollCreated }) => {
     console.log('Contract args:', {
       question,
       validOptions,
-      deadline: getDeadlineTimestamp(),
+      deadline: getDeadlineTimestamp().toString(),
       isMultipleChoice,
       hasWhitelist,
       validAddresses
@@ -111,6 +111,9 @@ const CreatePoll = ({ onPollCreated }) => {
     functionName: 'createPoll',
     args: getContractArgs(),
     enabled: isFormValid(),
+    onError: (error) => {
+      console.error('Prepare error:', error);
+    }
   });
 
   const { write: createPoll, data: createData, isLoading: isCreating } = useContractWrite({
@@ -169,8 +172,6 @@ const CreatePoll = ({ onPollCreated }) => {
     },
   });
 
-  const isLoading = isCreating || isWaitingCreate;
-
   const handleAddOption = () => {
     if (options.length >= 5) return;
     setOptions(prev => [...prev, '']);
@@ -226,7 +227,10 @@ const CreatePoll = ({ onPollCreated }) => {
 
     try {
       console.log('Creating poll with args:', getContractArgs());
-      await createPoll?.();
+      if (!createPoll) {
+        throw new Error('Create poll function not available. Please make sure your wallet is connected.');
+      }
+      await createPoll();
     } catch (error) {
       console.error('Create poll error:', error);
       toast({
@@ -238,9 +242,10 @@ const CreatePoll = ({ onPollCreated }) => {
     }
   };
 
+  const isLoading = isCreating || isWaitingCreate;
+
   // Log current form state for debugging
   console.log('Form state:', {
-    isValid: isFormValid(),
     hasQuestion: Boolean(question.trim()),
     hasValidOptions: options.filter(opt => opt.trim() !== '').length >= 2,
     hasValidDeadline: getDeadlineTimestamp() > BigInt(Math.floor(Date.now() / 1000)),

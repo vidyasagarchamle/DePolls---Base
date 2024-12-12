@@ -24,6 +24,7 @@ import CreatePoll from './CreatePoll';
 const PollList = () => {
   const [polls, setPolls] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const toast = useToast();
   const { address } = useAccount();
   const publicClient = usePublicClient();
@@ -39,11 +40,15 @@ const PollList = () => {
     watch: true,
     onError: (error) => {
       console.error('Error fetching poll count:', error);
+      setError('Failed to fetch poll count');
     },
   });
 
   const fetchPollDetails = useCallback(async (pollId) => {
-    if (!publicClient) return null;
+    if (!publicClient) {
+      console.log('No public client available');
+      return null;
+    }
 
     try {
       console.log(`Fetching poll ${pollId}...`);
@@ -94,7 +99,7 @@ const PollList = () => {
             })
           ]);
         } catch (error) {
-          console.warn(`Error fetching vote status for poll ${pollId}:`, error);
+          console.error(`Error fetching voting status for poll ${pollId}:`, error);
         }
       }
 
@@ -133,7 +138,7 @@ const PollList = () => {
     }
     
     setIsLoading(true);
-    setPolls([]); // Clear existing polls before fetching
+    setError(null);
     
     try {
       const count = Number(pollCount);
@@ -144,7 +149,7 @@ const PollList = () => {
         return;
       }
 
-      // Fetch polls sequentially to avoid rate limiting
+      // Fetch polls one by one to avoid batch errors
       const validPolls = [];
       for (let i = count - 1; i >= 0; i--) {
         try {
@@ -161,6 +166,7 @@ const PollList = () => {
       setPolls(validPolls);
     } catch (error) {
       console.error('Error fetching polls:', error);
+      setError('Failed to load polls');
       toast({
         title: 'Error',
         description: 'Failed to load polls. Please try again.',
@@ -180,35 +186,25 @@ const PollList = () => {
     }
   }, [pollCount, address, fetchPolls]);
 
-  // Filter polls
-  const filterPolls = useCallback((polls) => {
-    const now = Math.floor(Date.now() / 1000);
-    
-    return polls.filter(poll => {
-      if (poll.hasWhitelist && !poll.isWhitelisted && !poll.isCreator) {
-        return false;
-      }
-
-      switch (filter) {
-        case 'active':
-          return poll.deadline > now && poll.isActive;
-        case 'expired':
-          return poll.deadline <= now || !poll.isActive;
-        case 'voted':
-          return poll.hasVoted;
-        default:
-          return true;
-      }
-    });
-  }, [filter]);
-
   const handleRefresh = useCallback(() => {
     console.log('Refreshing polls...');
-    setPolls([]);
+    setError(null);
     refetchPollCount();
   }, [refetchPollCount]);
 
-  const filteredPolls = filterPolls(polls);
+  if (error) {
+    return (
+      <Container maxW="container.lg" py={8}>
+        <Alert status="error" borderRadius="lg">
+          <AlertIcon />
+          <Text>{error}</Text>
+          <Button ml={4} onClick={handleRefresh} size="sm">
+            Retry
+          </Button>
+        </Alert>
+      </Container>
+    );
+  }
 
   return (
     <Container maxW="container.lg" py={8}>
@@ -224,39 +220,16 @@ const PollList = () => {
         overflow="hidden"
       >
         <CardHeader pb={0}>
-          <Flex align="center" wrap="wrap" gap={4}>
-            <Menu>
-              <MenuButton
-                as={Button}
-                rightIcon={<ChevronDownIcon />}
-                variant="outline"
-                borderRadius="xl"
-                borderColor={borderColor}
-                _hover={{ borderColor: accentColor }}
-                size="md"
-              >
-                {filter === 'all' ? 'All Polls' :
-                 filter === 'active' ? 'Active Polls' :
-                 filter === 'expired' ? 'Expired Polls' :
-                 'Voted Polls'}
-              </MenuButton>
-              <MenuList borderRadius="xl" shadow="lg">
-                <MenuItem onClick={() => setFilter('all')}>All Polls</MenuItem>
-                <MenuItem onClick={() => setFilter('active')}>Active Polls</MenuItem>
-                <MenuItem onClick={() => setFilter('expired')}>Expired Polls</MenuItem>
-                <MenuItem onClick={() => setFilter('voted')}>Voted Polls</MenuItem>
-              </MenuList>
-            </Menu>
-
-            <IconButton
-              icon={<RepeatIcon />}
-              onClick={handleRefresh}
-              variant="ghost"
-              borderRadius="xl"
-              isLoading={isLoading}
-              aria-label="Refresh polls"
-            />
-          </Flex>
+          <Heading size="md" mb={4}>Polls</Heading>
+          <Button
+            leftIcon={<RepeatIcon />}
+            onClick={handleRefresh}
+            isLoading={isLoading}
+            variant="ghost"
+            size="sm"
+          >
+            Refresh
+          </Button>
         </CardHeader>
 
         <Box p={6}>
@@ -264,16 +237,17 @@ const PollList = () => {
             <Center py={8}>
               <Spinner size="xl" color="brand.500" thickness="4px" />
             </Center>
-          ) : filteredPolls.length > 0 ? (
+          ) : polls.length > 0 ? (
             <VStack spacing={4} align="stretch">
-              {filteredPolls.map((poll) => (
+              {polls.map((poll) => (
                 <Poll key={poll.id} poll={poll} onVote={handleRefresh} onClose={handleRefresh} />
               ))}
             </VStack>
           ) : (
-            <Center py={8}>
-              <Text>No polls found</Text>
-            </Center>
+            <Alert status="info" borderRadius="lg">
+              <AlertIcon />
+              <Text>No polls found. Create one to get started!</Text>
+            </Alert>
           )}
         </Box>
       </Card>
