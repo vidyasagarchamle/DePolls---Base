@@ -52,7 +52,9 @@ const CreatePoll = ({ onPollCreated }) => {
   // Calculate deadline timestamp
   const getDeadlineTimestamp = () => {
     if (!deadline) return BigInt(0);
-    return BigInt(Math.floor(new Date(deadline).getTime() / 1000));
+    const deadlineDate = new Date(deadline).getTime() / 1000;
+    const currentTime = Math.floor(Date.now() / 1000);
+    return BigInt(Math.max(deadlineDate, currentTime + 300)); // At least 5 minutes in the future
   };
 
   // Prepare contract arguments
@@ -62,42 +64,49 @@ const CreatePoll = ({ onPollCreated }) => {
       ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr))
       : [];
 
-    console.log('Contract args:', {
-      question,
-      validOptions,
-      deadline: getDeadlineTimestamp().toString(),
-      isMultipleChoice,
-      hasWhitelist,
-      validAddresses
-    });
-
-    return [
-      question,
+    const args = [
+      question.trim(),
       validOptions,
       getDeadlineTimestamp(),
       isMultipleChoice,
       hasWhitelist,
       validAddresses,
     ];
+
+    console.log('Contract args:', {
+      question: args[0],
+      options: args[1],
+      deadline: args[2].toString(),
+      isMultipleChoice: args[3],
+      hasWhitelist: args[4],
+      whitelistedAddresses: args[5]
+    });
+
+    return args;
   };
 
   // Check if form is valid
   const isFormValid = () => {
     const validOptions = options.filter(opt => opt.trim() !== '');
+    const validAddresses = hasWhitelist 
+      ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr))
+      : [];
     const currentTime = BigInt(Math.floor(Date.now() / 1000));
     const deadlineTime = getDeadlineTimestamp();
 
     const isValid = Boolean(
-      question.trim() && 
+      question.trim().length > 0 && 
       validOptions.length >= 2 &&
-      deadlineTime > currentTime
+      deadlineTime > currentTime &&
+      (!hasWhitelist || validAddresses.length > 0)
     );
 
     console.log('Form validation:', {
-      hasQuestion: Boolean(question.trim()),
+      hasQuestion: question.trim().length > 0,
       validOptionsCount: validOptions.length,
       deadline: deadlineTime.toString(),
       currentTime: currentTime.toString(),
+      hasValidWhitelist: !hasWhitelist || validAddresses.length > 0,
       isValid
     });
 
@@ -111,9 +120,6 @@ const CreatePoll = ({ onPollCreated }) => {
     functionName: 'createPoll',
     args: getContractArgs(),
     enabled: isFormValid(),
-    onError: (error) => {
-      console.error('Prepare error:', error);
-    }
   });
 
   const { write: createPoll, data: createData, isLoading: isCreating } = useContractWrite({
@@ -129,9 +135,17 @@ const CreatePoll = ({ onPollCreated }) => {
     },
     onError: (error) => {
       console.error('Contract write error:', error);
+      let errorMessage = 'Failed to create poll';
+      if (error.message.includes("Deadline must be in the future")) {
+        errorMessage = "Deadline must be at least 5 minutes in the future";
+      } else if (error.message.includes("Question cannot be empty")) {
+        errorMessage = "Question cannot be empty";
+      } else if (error.message.includes("At least 2 options required")) {
+        errorMessage = "At least 2 options are required";
+      }
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create poll',
+        description: errorMessage,
         status: 'error',
         duration: 5000,
       });
