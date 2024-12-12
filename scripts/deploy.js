@@ -4,9 +4,12 @@ async function main() {
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deploying contracts with the account:", deployer.address);
 
-  // Deploy DePolls
+  // Deploy DePolls with optimized gas settings
   const DePolls = await hre.ethers.getContractFactory("DePolls");
-  const polls = await DePolls.deploy();
+  const polls = await DePolls.deploy({
+    gasPrice: hre.ethers.utils.parseUnits('1', 'gwei'), // Low gas price
+    gasLimit: 5000000 // Optimized gas limit
+  });
   await polls.deployed();
   console.log("DePolls deployed to:", polls.address);
 
@@ -17,6 +20,20 @@ async function main() {
   };
   fs.writeFileSync("deployed-addresses.json", JSON.stringify(addresses, null, 2));
   console.log("\nContract address saved to deployed-addresses.json");
+
+  // Verify contract on Basescan
+  if (hre.network.name !== "localhost" && process.env.BASESCAN_API_KEY) {
+    console.log("\nVerifying contract on Basescan...");
+    try {
+      await hre.run("verify:verify", {
+        address: polls.address,
+        constructorArguments: []
+      });
+      console.log("Contract verified successfully");
+    } catch (error) {
+      console.log("Verification failed:", error.message);
+    }
+  }
 }
 
 main()

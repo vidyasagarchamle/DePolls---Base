@@ -2,30 +2,17 @@ import React, { useState } from 'react';
 import {
   Box,
   VStack,
-  Heading,
+  HStack,
   Text,
   Button,
-  RadioGroup,
-  Radio,
-  Checkbox,
-  Stack,
   useToast,
-  Alert,
-  AlertIcon,
-  HStack,
-  Badge,
-  Tooltip,
-  Progress,
+  useColorModeValue,
   Modal,
   ModalOverlay,
   ModalContent,
   ModalHeader,
   ModalBody,
   ModalFooter,
-  useDisclosure,
-  IconButton,
-  useColorModeValue,
-  useColorMode,
   ModalCloseButton,
   Table,
   Thead,
@@ -33,31 +20,31 @@ import {
   Tr,
   Th,
   Td,
+  Badge,
+  Tooltip,
+  IconButton,
   Spinner,
+  Progress,
+  Divider,
 } from '@chakra-ui/react';
-import { TimeIcon, DeleteIcon, ViewIcon } from '@chakra-ui/icons';
+import { DeleteIcon, ViewIcon, LockIcon, StarIcon, CheckIcon } from '@chakra-ui/icons';
 import { useContractWrite, usePrepareContractWrite, useAccount, useWaitForTransaction } from 'wagmi';
-import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import { ethers } from 'ethers';
+import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 
 const Poll = ({ poll, onVote }) => {
   const [selectedOptions, setSelectedOptions] = useState([]);
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const toast = useToast();
-  const { address } = useAccount();
-  const { colorMode } = useColorMode();
   const [showVoters, setShowVoters] = useState(false);
   const [voters, setVoters] = useState([]);
   const [isLoadingVoters, setIsLoadingVoters] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const toast = useToast();
 
-  // Color mode values
   const bgColor = useColorModeValue('white', 'gray.800');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const mutedColor = useColorModeValue('gray.600', 'gray.300');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const textColor = useColorModeValue('gray.700', 'white');
-  const mutedColor = useColorModeValue('gray.600', 'gray.400');
   const votedBgColor = useColorModeValue('gray.50', 'gray.700');
-  const progressBgColor = useColorModeValue('gray.100', 'gray.600');
-  const progressFilledColor = useColorModeValue('blue.500', 'blue.300');
 
   const isExpired = poll.deadline * 1000 < Date.now();
   const totalVotes = poll.options.reduce((sum, opt) => sum + Number(opt.voteCount), 0);
@@ -68,7 +55,7 @@ const Poll = ({ poll, onVote }) => {
     abi: DePollsABI,
     functionName: 'vote',
     args: [poll.id, selectedOptions],
-    enabled: selectedOptions.length > 0 && !poll.hasVoted && !isExpired && !poll.isCreator,
+    enabled: selectedOptions.length > 0 && !poll.hasVoted && !isExpired,
   });
 
   const { write: vote, isLoading: isVoting, data: voteData } = useContractWrite({
@@ -90,86 +77,21 @@ const Poll = ({ poll, onVote }) => {
       toast.close('voting');
       toast({
         title: 'Success!',
-        description: 'Your vote has been recorded.',
+        description: poll.rewardToken !== ethers.constants.AddressZero 
+          ? 'Your vote has been recorded. You can now claim your reward!'
+          : 'Your vote has been recorded.',
         status: 'success',
         duration: 5000,
       });
       if (onVote) {
         onVote();
-        setTimeout(() => onVote(), 1000);
-        setTimeout(() => onVote(), 3000);
+        setTimeout(() => onVote(), 2000);
         setTimeout(() => onVote(), 5000);
       }
     },
-    onError: (error) => {
-      toast.close('voting');
-      toast({
-        title: 'Error',
-        description: 'Failed to record vote. Please try again.',
-        status: 'error',
-        duration: 5000,
-      });
-      if (onVote) onVote();
-    },
   });
 
-  const isVoteLoading = isVoting || isWaitingVote;
-
-  // Close poll functionality
-  const { config: closeConfig } = usePrepareContractWrite({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'closePoll',
-    args: [poll.id],
-    enabled: poll.isCreator && poll.isActive,
-  });
-
-  const { write: closePoll, isLoading: isClosing, data: closeData } = useContractWrite({
-    ...closeConfig,
-    onSuccess: () => {
-      toast({
-        title: 'Transaction Submitted',
-        description: 'Your poll is being deleted.',
-        status: 'info',
-        duration: null,
-        id: 'deleting-poll',
-      });
-    },
-  });
-
-  const { isLoading: isWaitingClose } = useWaitForTransaction({
-    hash: closeData?.hash,
-    onSuccess: () => {
-      toast.close('deleting-poll');
-      toast({
-        title: 'Success!',
-        description: 'Your poll has been deleted successfully.',
-        status: 'success',
-        duration: 5000,
-      });
-      onClose();
-      if (onVote) {
-        onVote();
-        setTimeout(() => onVote(), 1000);
-        setTimeout(() => onVote(), 3000);
-        setTimeout(() => onVote(), 5000);
-      }
-    },
-    onError: (error) => {
-      toast.close('deleting-poll');
-      toast({
-        title: 'Error',
-        description: 'Failed to delete poll. Please try again.',
-        status: 'error',
-        duration: 5000,
-      });
-    },
-  });
-
-  const isCloseLoading = isClosing || isWaitingClose;
-  const isAnyTransactionPending = isVoteLoading || isCloseLoading;
-
-  // Add reward claiming functionality
+  // Reward claiming functionality
   const { config: claimConfig } = usePrepareContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
@@ -180,7 +102,7 @@ const Poll = ({ poll, onVote }) => {
             poll.rewardAmount.gt(0),
   });
 
-  const { write: claimReward, isLoading: isClaimLoading, data: claimData } = useContractWrite({
+  const { write: claimReward, isLoading: isClaimingReward, data: claimData } = useContractWrite({
     ...claimConfig,
     onSuccess: () => {
       toast({
@@ -203,110 +125,56 @@ const Poll = ({ poll, onVote }) => {
         status: 'success',
         duration: 5000,
       });
-      if (onVote) {
-        onVote();
-      }
     },
-    onError: () => {
-      toast.close('claiming-reward');
+  });
+
+  // Close poll functionality
+  const { config: closeConfig } = usePrepareContractWrite({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'closePoll',
+    args: [poll.id],
+    enabled: poll.isCreator && poll.isActive,
+  });
+
+  const { write: closePoll, isLoading: isClosing, data: closeData } = useContractWrite({
+    ...closeConfig,
+    onSuccess: () => {
       toast({
-        title: 'Error',
-        description: 'Failed to claim reward. Please try again.',
-        status: 'error',
-        duration: 5000,
+        title: 'Transaction Submitted',
+        description: 'Your poll is being closed.',
+        status: 'info',
+        duration: null,
+        id: 'closing-poll',
       });
     },
   });
 
-  const isClaimingReward = isClaimLoading || isWaitingClaim;
-  const isAnyTransactionPending = isVoteLoading || isCloseLoading || isClaimingReward;
-
-  const handleDelete = () => {
-    onOpen();
-  };
-
-  const confirmDelete = () => {
-    if (!closePoll) return;
-    try {
-      closePoll();
-    } catch (error) {
-      console.error('Delete error:', error);
+  const { isLoading: isWaitingClose } = useWaitForTransaction({
+    hash: closeData?.hash,
+    onSuccess: () => {
+      toast.close('closing-poll');
       toast({
-        title: 'Error',
-        description: 'Failed to submit transaction. Please try again.',
-        status: 'error',
+        title: 'Success!',
+        description: 'Poll closed successfully.',
+        status: 'success',
         duration: 5000,
       });
-    }
-  };
+      onClose();
+      if (onVote) {
+        onVote();
+        setTimeout(() => onVote(), 2000);
+        setTimeout(() => onVote(), 5000);
+      }
+    },
+  });
 
-  const handleVote = () => {
-    if (!vote || isVoteLoading) return;
-    if (selectedOptions.length === 0) {
-      toast({
-        title: 'Select Option',
-        description: poll.isMultipleChoice ? 'Please select at least one option to vote.' : 'Please select an option to vote.',
-        status: 'warning',
-        duration: 5000,
-      });
-      return;
-    }
-    try {
-      vote();
-    } catch (error) {
-      console.error('Vote error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to submit vote. Please try again.',
-        status: 'error',
-        duration: 5000,
-      });
-    }
-  };
+  const isVoteLoading = isVoting || isWaitingVote;
+  const isClaimLoading = isClaimingReward || isWaitingClaim;
+  const isCloseLoading = isClosing || isWaitingClose;
+  const isAnyTransactionPending = isVoteLoading || isClaimLoading || isCloseLoading;
 
-  const handleOptionSelect = (index) => {
-    if (poll.isMultipleChoice) {
-      setSelectedOptions(prev => {
-        const optionIndex = parseInt(index);
-        if (prev.includes(optionIndex)) {
-          return prev.filter(opt => opt !== optionIndex);
-        } else {
-          return [...prev, optionIndex];
-        }
-      });
-    } else {
-      setSelectedOptions([parseInt(index)]);
-    }
-  };
-
-  const getTimeLeft = () => {
-    const now = new Date();
-    const deadline = new Date(poll.deadline * 1000);
-    if (now > deadline) return 'Ended';
-    
-    const diff = deadline - now;
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    
-    if (days > 0) return `${days}d ${hours}h left`;
-    if (hours > 0) return `${hours}h left`;
-    return 'Ending soon';
-  };
-
-  const getStatusBadge = () => {
-    if (isExpired) {
-      return <Badge colorScheme="red">Expired</Badge>;
-    }
-    if (poll.hasVoted) {
-      return <Badge colorScheme="green">Voted</Badge>;
-    }
-    if (poll.isCreator) {
-      return <Badge colorScheme="purple">Created by You</Badge>;
-    }
-    return <Badge colorScheme="blue">Active</Badge>;
-  };
-
-  // Add function to fetch voters
+  // Fetch voters for creator
   const fetchVoters = async () => {
     if (!poll.isCreator) return;
     
@@ -333,183 +201,208 @@ const Poll = ({ poll, onVote }) => {
     }
   };
 
-  // Add handler for viewing voters
+  const handleOptionSelect = (index) => {
+    if (poll.isMultipleChoice) {
+      setSelectedOptions(prev => {
+        if (prev.includes(index)) {
+          return prev.filter(i => i !== index);
+        }
+        return [...prev, index];
+      });
+    } else {
+      setSelectedOptions([index]);
+    }
+  };
+
+  const handleVote = () => {
+    if (!vote || isVoteLoading) return;
+    if (selectedOptions.length === 0) {
+      toast({
+        title: 'Select Option',
+        description: poll.isMultipleChoice 
+          ? 'Please select at least one option to vote.'
+          : 'Please select an option to vote.',
+        status: 'warning',
+        duration: 5000,
+      });
+      return;
+    }
+    vote();
+  };
+
   const handleViewVoters = () => {
     setShowVoters(true);
     fetchVoters();
   };
 
-  // Add reward info display
-  const renderRewardInfo = () => {
-    if (poll.rewardToken === ethers.constants.AddressZero) return null;
+  const renderPollStatus = () => {
+    const badges = [];
+
+    if (isExpired) {
+      badges.push(
+        <Badge key="expired" colorScheme="red">Expired</Badge>
+      );
+    } else if (poll.hasVoted) {
+      badges.push(
+        <Badge key="voted" colorScheme="green">
+          <HStack spacing={1}>
+            <CheckIcon />
+            <Text>Voted</Text>
+          </HStack>
+        </Badge>
+      );
+    }
+
+    if (poll.hasWhitelist) {
+      badges.push(
+        <Tooltip key="whitelist" label="Whitelisted Poll">
+          <Badge colorScheme="purple">
+            <HStack spacing={1}>
+              <LockIcon />
+              <Text>Whitelisted</Text>
+            </HStack>
+          </Badge>
+        </Tooltip>
+      );
+    }
+
+    if (poll.rewardToken !== ethers.constants.AddressZero) {
+      badges.push(
+        <Tooltip key="reward" label={`Reward: ${ethers.utils.formatEther(poll.rewardAmount)} tokens`}>
+          <Badge colorScheme="yellow">
+            <HStack spacing={1}>
+              <StarIcon />
+              <Text>Rewards</Text>
+            </HStack>
+          </Badge>
+        </Tooltip>
+      );
+    }
 
     return (
-      <HStack spacing={2} mt={2}>
-        <Text color={mutedColor} fontSize="sm">
-          Reward: {ethers.utils.formatEther(poll.rewardAmount)} tokens
-        </Text>
-        {poll.hasVoted && !isExpired && (
-          <Button
-            size="sm"
-            colorScheme="yellow"
-            onClick={() => claimReward?.()}
-            isLoading={isClaimingReward}
-            loadingText="Claiming..."
-            isDisabled={isAnyTransactionPending}
-          >
-            Claim Reward
-          </Button>
-        )}
+      <HStack spacing={2}>
+        {badges}
       </HStack>
     );
   };
 
   return (
-    <>
-      <Box
-        borderWidth="1px"
-        borderRadius="xl"
-        p={6}
-        bg={bgColor}
-        borderColor={borderColor}
-        shadow="sm"
-        width="100%"
-        position="relative"
-        transition="all 0.2s"
-        _hover={{
-          transform: isAnyTransactionPending ? 'none' : 'translateY(-2px)',
-          shadow: 'md',
-          borderColor: 'brand.500',
-        }}
-      >
-        <VStack align="stretch" spacing={4}>
-          <HStack justify="space-between" align="flex-start">
-            <VStack align="start" spacing={1}>
-              <Heading size="md" color={textColor}>{poll.question}</Heading>
-              <HStack spacing={2}>
-                <TimeIcon color={mutedColor} />
-                <Text fontSize="sm" color={mutedColor}>
-                  {getTimeLeft()}
-                </Text>
-                {getStatusBadge()}
-              </HStack>
-              {renderRewardInfo()}
-            </VStack>
-          </HStack>
-
-          <Box>
-            {poll.options.map((option, index) => {
-              const percentage = totalVotes > 0 ? (option.voteCount / totalVotes) * 100 : 0;
-              const isSelected = selectedOptions.includes(index);
-
-              return (
-                <Box
-                  key={index}
-                  mb={3}
-                  p={3}
-                  borderRadius="md"
-                  bg={isSelected ? votedBgColor : 'transparent'}
-                  borderWidth="1px"
-                  borderColor={isSelected ? 'brand.500' : borderColor}
-                >
-                  {poll.hasVoted || isExpired || poll.isCreator ? (
-                    <VStack align="stretch" spacing={1}>
-                      <HStack justify="space-between">
-                        <Text color={textColor} fontWeight={isSelected ? 'medium' : 'normal'}>
-                          {option.text}
-                        </Text>
-                        <Text color={mutedColor} fontSize="sm">
-                          {option.voteCount} votes ({percentage.toFixed(1)}%)
-                        </Text>
-                      </HStack>
-                      <Progress
-                        value={percentage}
-                        size="sm"
-                        borderRadius="full"
-                        bg={progressBgColor}
-                        colorScheme="brand"
-                      />
-                    </VStack>
-                  ) : (
-                    <Box 
-                      onClick={() => !isAnyTransactionPending && handleOptionSelect(index)}
-                      cursor={isAnyTransactionPending ? 'not-allowed' : 'pointer'}
-                      width="100%"
-                    >
-                      {poll.isMultipleChoice ? (
-                        <Checkbox
-                          isChecked={selectedOptions.includes(index)}
-                          colorScheme="brand"
-                          isDisabled={isAnyTransactionPending}
-                          onChange={() => !isAnyTransactionPending && handleOptionSelect(index)}
-                          width="100%"
-                        >
-                          <Text color={textColor}>{option.text}</Text>
-                        </Checkbox>
-                      ) : (
-                        <Radio
-                          isChecked={selectedOptions.includes(index)}
-                          colorScheme="brand"
-                          isDisabled={isAnyTransactionPending}
-                          onChange={() => !isAnyTransactionPending && handleOptionSelect(index)}
-                          width="100%"
-                        >
-                          <Text color={textColor}>{option.text}</Text>
-                        </Radio>
-                      )}
-                    </Box>
-                  )}
-                </Box>
-              );
-            })}
-          </Box>
-
-          {!poll.hasVoted && !isExpired && !poll.isCreator && (
-            <Button
-              onClick={handleVote}
-              isLoading={isVoteLoading}
-              loadingText="Submitting Vote..."
-              width="full"
-              isDisabled={isAnyTransactionPending || selectedOptions.length === 0}
-            >
-              Submit Vote
-            </Button>
-          )}
-
-          {poll.isCreator && poll.isActive && (
-            <HStack spacing={2} mt={4}>
-              <Button
-                leftIcon={<DeleteIcon />}
-                onClick={handleDelete}
-                colorScheme="red"
-                variant="ghost"
-                size="sm"
-                isLoading={isCloseLoading}
-                loadingText="Deleting..."
-                isDisabled={isAnyTransactionPending}
-              >
-                Delete Poll
-              </Button>
+    <Box
+      borderWidth="1px"
+      borderRadius="xl"
+      p={6}
+      bg={bgColor}
+      borderColor={borderColor}
+      shadow="sm"
+      width="100%"
+      position="relative"
+      transition="all 0.2s"
+      _hover={{
+        transform: isAnyTransactionPending ? 'none' : 'translateY(-2px)',
+        shadow: 'md',
+        borderColor: 'brand.500',
+      }}
+    >
+      <VStack align="stretch" spacing={4}>
+        <HStack justify="space-between" align="flex-start">
+          <VStack align="start" spacing={2}>
+            <Text fontSize="xl" fontWeight="bold" color={textColor}>
+              {poll.question}
+            </Text>
+            {renderPollStatus()}
+          </VStack>
+          
+          {poll.isCreator && (
+            <HStack>
               <Tooltip label="View Voters">
                 <IconButton
                   icon={<ViewIcon />}
                   onClick={handleViewVoters}
                   variant="ghost"
-                  size="sm"
                   isDisabled={isAnyTransactionPending}
                 />
               </Tooltip>
+              {poll.isActive && (
+                <Tooltip label="Close Poll">
+                  <IconButton
+                    icon={<DeleteIcon />}
+                    onClick={onOpen}
+                    colorScheme="red"
+                    variant="ghost"
+                    isDisabled={isAnyTransactionPending}
+                  />
+                </Tooltip>
+              )}
             </HStack>
           )}
+        </HStack>
 
-          {poll.hasVoted && (
-            <Alert status="success" borderRadius="md" bg={votedBgColor}>
-              <AlertIcon />
-              <Text color={textColor}>You have voted on this poll</Text>
-            </Alert>
-          )}
-        </VStack>
-      </Box>
+        <Box>
+          {poll.options.map((option, index) => {
+            const percentage = totalVotes > 0 ? (option.voteCount / totalVotes) * 100 : 0;
+            const isSelected = selectedOptions.includes(index);
+
+            return (
+              <Box
+                key={index}
+                mb={3}
+                p={3}
+                borderRadius="md"
+                bg={isSelected ? votedBgColor : 'transparent'}
+                borderWidth="1px"
+                borderColor={isSelected ? 'brand.500' : borderColor}
+                cursor={!poll.hasVoted && !isExpired ? 'pointer' : 'default'}
+                onClick={() => !poll.hasVoted && !isExpired && handleOptionSelect(index)}
+                transition="all 0.2s"
+                _hover={{
+                  borderColor: !poll.hasVoted && !isExpired ? 'brand.500' : undefined,
+                }}
+              >
+                <VStack align="stretch" spacing={1}>
+                  <HStack justify="space-between">
+                    <Text color={textColor} fontWeight={isSelected ? 'medium' : 'normal'}>
+                      {option.text}
+                    </Text>
+                    <Text color={mutedColor} fontSize="sm">
+                      {option.voteCount} votes ({percentage.toFixed(1)}%)
+                    </Text>
+                  </HStack>
+                  <Progress
+                    value={percentage}
+                    size="sm"
+                    colorScheme="brand"
+                    borderRadius="full"
+                  />
+                </VStack>
+              </Box>
+            );
+          })}
+        </Box>
+
+        {!poll.hasVoted && !isExpired && (
+          <Button
+            onClick={handleVote}
+            isLoading={isVoteLoading}
+            loadingText="Submitting Vote..."
+            isDisabled={isAnyTransactionPending || selectedOptions.length === 0}
+            colorScheme="brand"
+          >
+            Submit Vote
+          </Button>
+        )}
+
+        {poll.hasVoted && poll.rewardToken !== ethers.constants.AddressZero && (
+          <Button
+            onClick={() => claimReward?.()}
+            isLoading={isClaimLoading}
+            loadingText="Claiming Reward..."
+            isDisabled={isAnyTransactionPending}
+            colorScheme="yellow"
+          >
+            Claim Reward
+          </Button>
+        )}
+      </VStack>
 
       {/* Voters Modal */}
       <Modal isOpen={showVoters} onClose={() => setShowVoters(false)} size="xl">
@@ -562,13 +455,14 @@ const Poll = ({ poll, onVote }) => {
         </ModalContent>
       </Modal>
 
+      {/* Close Poll Modal */}
       <Modal isOpen={isOpen} onClose={onClose} closeOnOverlayClick={!isCloseLoading}>
         <ModalOverlay backdropFilter="blur(4px)" />
         <ModalContent bg={bgColor}>
-          <ModalHeader color={textColor}>Delete Poll</ModalHeader>
+          <ModalHeader color={textColor}>Close Poll</ModalHeader>
           <ModalBody>
             <Text color={textColor}>
-              Are you sure you want to delete this poll? This action cannot be undone.
+              Are you sure you want to close this poll? This action cannot be undone.
             </Text>
           </ModalBody>
           <ModalFooter>
@@ -577,17 +471,17 @@ const Poll = ({ poll, onVote }) => {
             </Button>
             <Button
               colorScheme="red"
-              onClick={confirmDelete}
+              onClick={() => closePoll?.()}
               isLoading={isCloseLoading}
-              loadingText="Deleting..."
+              loadingText="Closing..."
               isDisabled={isAnyTransactionPending}
             >
-              Delete
+              Close Poll
             </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
-    </>
+    </Box>
   );
 };
 

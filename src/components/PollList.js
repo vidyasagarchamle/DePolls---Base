@@ -1,123 +1,96 @@
 import React, { useState, useEffect } from 'react';
 import {
   VStack,
-  Text,
-  Spinner,
-  useToast,
-  Container,
-  Alert,
-  AlertIcon,
-  Heading,
-  HStack,
-  Badge,
-  Center,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-  useColorModeValue,
   Box,
+  Text,
+  Button,
+  useToast,
+  Spinner,
+  Center,
+  useColorModeValue,
+  HStack,
+  Select,
+  IconButton,
   Tooltip,
-  Icon,
+  Badge,
 } from '@chakra-ui/react';
-import { LockIcon, StarIcon } from '@chakra-ui/icons';
+import { RepeatIcon, StarIcon, LockIcon } from '@chakra-ui/icons';
 import { useContractRead, useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import Poll from './Poll';
-import CreatePoll from './CreatePoll';
 
-function PollList() {
-  const { address } = useAccount();
-  const toast = useToast();
+const PollList = () => {
   const [polls, setPolls] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const containerWidth = { base: "95%", md: "90%", lg: "80%" };
-  const tabBg = useColorModeValue('white', 'gray.800');
+  const [isLoading, setIsLoading] = useState(true);
+  const [filter, setFilter] = useState('all'); // 'all', 'active', 'expired', 'voted', 'rewards', 'whitelist'
+  const toast = useToast();
+  const { address } = useAccount();
 
-  // Get poll count from contract
-  const { data: pollCount, isError: isPollCountError } = useContractRead({
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const mutedColor = useColorModeValue('gray.600', 'gray.300');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+
+  const { data: pollCount, refetch: refetchPollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
-    functionName: 'pollCount',
+    functionName: 'getPollCount',
     watch: true,
-    cacheTime: 0, // Disable caching to always get fresh data
   });
 
-  // Function to safely convert BigNumber to number
-  const safeToNumber = (value) => {
+  const fetchPollDetails = async (pollId) => {
     try {
-      if (!value) return 0;
-      if (typeof value === 'number') return value;
-      if (ethers.BigNumber.isBigNumber(value)) return value.toNumber();
-      return Number(value);
-    } catch (error) {
-      console.error('Error converting value to number:', error);
-      return 0;
-    }
-  };
+      const contract = new ethers.Contract(
+        POLLS_CONTRACT_ADDRESS,
+        DePollsABI,
+        new ethers.providers.Web3Provider(window.ethereum)
+      );
 
-  // Function to fetch a single poll
-  const fetchPoll = async (id, contract) => {
-    try {
-      const poll = await contract.getPoll(id);
-      const hasVoted = await contract.hasVoted(id, address);
-      
-      // Verify that we got valid poll data
-      if (!poll || !poll.question) {
-        console.warn(`Invalid poll data received for ID ${id}`);
-        return null;
-      }
+      const pollData = await contract.polls(pollId);
+      const options = await contract.getPollOptions(pollId);
+      const hasVoted = address ? await contract.hasVoted(pollId, address) : false;
+      const isCreator = address && pollData.creator.toLowerCase() === address.toLowerCase();
+      const isWhitelisted = address ? await contract.isWhitelisted(pollId, address) : false;
 
       return {
-        id: safeToNumber(poll.id),
-        creator: poll.creator,
-        question: poll.question,
-        options: poll.options.map(opt => ({
+        id: pollId,
+        question: pollData.question,
+        creator: pollData.creator,
+        deadline: pollData.deadline.toNumber(),
+        isMultipleChoice: pollData.isMultipleChoice,
+        isActive: pollData.isActive,
+        hasWhitelist: pollData.hasWhitelist,
+        rewardToken: pollData.rewardToken,
+        rewardAmount: pollData.rewardAmount,
+        options: options.map((opt, index) => ({
           text: opt.text,
-          voteCount: safeToNumber(opt.voteCount)
+          voteCount: opt.voteCount.toNumber(),
         })),
-        deadline: safeToNumber(poll.deadline),
-        isWeighted: poll.isWeighted,
-        isMultipleChoice: poll.isMultipleChoice,
-        isActive: poll.isActive,
-        hasVoted: hasVoted,
-        isCreator: poll.creator.toLowerCase() === address?.toLowerCase()
+        hasVoted,
+        isCreator,
+        isWhitelisted,
       };
     } catch (error) {
-      console.error(`Error fetching poll ${id}:`, error);
+      console.error(`Error fetching poll ${pollId}:`, error);
       return null;
     }
   };
 
-  // Function to fetch all polls
   const fetchPolls = async () => {
-    if (!pollCount || !address || !window.ethereum) {
-      setLoading(false);
-      return;
-    }
-
+    if (!pollCount) return;
+    
+    setIsLoading(true);
     try {
-      setLoading(true);
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const contract = new ethers.Contract(POLLS_CONTRACT_ADDRESS, DePollsABI, provider);
-      
-      const count = safeToNumber(pollCount);
-      console.log('Total poll count:', count);
-
-      // Fetch all polls in parallel
       const pollPromises = [];
-      for (let i = 0; i < count; i++) {
-        pollPromises.push(fetchPoll(i, contract));
+      for (let i = pollCount.toNumber() - 1; i >= 0; i--) {
+        pollPromises.push(fetchPollDetails(i));
       }
-
-      const fetchedPolls = (await Promise.all(pollPromises))
-        .filter(poll => poll !== null)
-        .sort((a, b) => b.id - a.id); // Sort by ID in descending order
-
-      setPolls(fetchedPolls);
-      setLoading(false);
+      
+      const pollResults = await Promise.all(pollPromises);
+      const validPolls = pollResults.filter(poll => poll !== null);
+      
+      setPolls(validPolls);
     } catch (error) {
       console.error('Error fetching polls:', error);
       toast({
@@ -125,219 +98,126 @@ function PollList() {
         description: 'Failed to load polls. Please try again.',
         status: 'error',
         duration: 5000,
-        isClosable: true,
       });
-      setLoading(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Effect to fetch polls when address or pollCount changes
   useEffect(() => {
-    if (isPollCountError) {
-      toast({
-        title: 'Error',
-        description: 'Failed to get poll count. Please check your connection.',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-      setLoading(false);
-      return;
+    if (pollCount) {
+      fetchPolls();
     }
+  }, [pollCount, address]);
 
+  const handleRefresh = () => {
+    refetchPollCount();
     fetchPolls();
-
-    // Set up polling interval for updates
-    const intervalId = setInterval(fetchPolls, 10000); // Poll every 10 seconds
-
-    return () => clearInterval(intervalId); // Cleanup on unmount
-  }, [address, pollCount, isPollCountError]);
-
-  // Handler for poll updates
-  const handlePollUpdate = async () => {
-    await fetchPolls();
   };
 
-  const renderPollStatus = (poll) => {
+  const filterPolls = (polls) => {
+    const now = Date.now();
+    
+    return polls.filter(poll => {
+      switch (filter) {
+        case 'active':
+          return poll.deadline * 1000 > now && poll.isActive;
+        case 'expired':
+          return poll.deadline * 1000 <= now || !poll.isActive;
+        case 'voted':
+          return poll.hasVoted;
+        case 'rewards':
+          return poll.rewardToken !== ethers.constants.AddressZero;
+        case 'whitelist':
+          return poll.hasWhitelist;
+        default:
+          return true;
+      }
+    });
+  };
+
+  const renderFilterBadge = () => {
+    const count = filterPolls(polls).length;
     return (
-      <HStack spacing={2}>
-        {poll.hasWhitelist && (
-          <Tooltip label="Whitelisted Poll">
-            <Badge colorScheme="purple">
-              <HStack spacing={1}>
-                <Icon as={LockIcon} />
-                <Text>Whitelisted</Text>
-              </HStack>
-            </Badge>
-          </Tooltip>
-        )}
-        {poll.rewardToken !== ethers.constants.AddressZero && (
-          <Tooltip label={`Reward: ${ethers.utils.formatEther(poll.rewardAmount)} tokens`}>
-            <Badge colorScheme="yellow">
-              <HStack spacing={1}>
-                <Icon as={StarIcon} />
-                <Text>Rewards</Text>
-              </HStack>
-            </Badge>
-          </Tooltip>
-        )}
-      </HStack>
+      <Badge
+        colorScheme="brand"
+        variant="subtle"
+        fontSize="sm"
+        ml={2}
+      >
+        {count} {count === 1 ? 'poll' : 'polls'}
+      </Badge>
     );
   };
 
-  // Render loading state
-  if (loading) {
+  if (isLoading) {
     return (
-      <Container maxW={containerWidth} py={8}>
-        <CreatePoll onPollCreated={handlePollUpdate} />
-        <Center py={8}>
+      <Center py={10}>
+        <VStack spacing={4}>
+          <Spinner size="xl" color="brand.500" />
+          <Text color={textColor}>Loading polls...</Text>
+        </VStack>
+      </Center>
+    );
+  }
+
+  const filteredPolls = filterPolls(polls);
+
+  return (
+    <Box>
+      <HStack spacing={4} mb={6} justify="space-between">
+        <HStack spacing={4}>
+          <Select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            bg={bgColor}
+            color={textColor}
+            borderColor={borderColor}
+            _hover={{ borderColor: 'brand.500' }}
+          >
+            <option value="all">All Polls</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+            <option value="voted">Voted</option>
+            <option value="rewards">With Rewards</option>
+            <option value="whitelist">Whitelisted</option>
+          </Select>
+          {renderFilterBadge()}
+        </HStack>
+        <Tooltip label="Refresh Polls">
+          <IconButton
+            icon={<RepeatIcon />}
+            onClick={handleRefresh}
+            variant="ghost"
+            colorScheme="brand"
+            isLoading={isLoading}
+          />
+        </Tooltip>
+      </HStack>
+
+      {filteredPolls.length > 0 ? (
+        <VStack spacing={6} align="stretch">
+          {filteredPolls.map((poll) => (
+            <Poll
+              key={poll.id}
+              poll={poll}
+              onVote={handleRefresh}
+            />
+          ))}
+        </VStack>
+      ) : (
+        <Center py={10}>
           <VStack spacing={4}>
-            <Spinner size="xl" color="brand.500" thickness="4px" />
-            <Text>Loading polls...</Text>
+            <Text color={mutedColor} fontSize="lg" textAlign="center">
+              {filter === 'all'
+                ? 'No polls found. Create one to get started!'
+                : `No ${filter} polls found.`}
+            </Text>
           </VStack>
         </Center>
-      </Container>
-    );
-  }
-
-  // Render wallet connection prompt
-  if (!address) {
-    return (
-      <Container maxW={containerWidth} py={8}>
-        <CreatePoll onPollCreated={handlePollUpdate} />
-        <Alert
-          status="info"
-          variant="subtle"
-          flexDirection="column"
-          alignItems="center"
-          justifyContent="center"
-          textAlign="center"
-          height="200px"
-          borderRadius="xl"
-          bg={useColorModeValue('white', 'gray.800')}
-        >
-          <AlertIcon boxSize="40px" mb={4} />
-          <Heading size="md" mb={2} color={useColorModeValue('gray.800', 'white')}>Connect Your Wallet</Heading>
-          <Text color={useColorModeValue('gray.600', 'gray.300')}>Please connect your wallet to view and participate in polls</Text>
-        </Alert>
-      </Container>
-    );
-  }
-
-  // Filter polls
-  const activePolls = polls.filter(poll => {
-    const deadline = new Date(poll.deadline * 1000);
-    const now = new Date();
-    return poll.isActive && deadline > now && !poll.isCreator;
-  });
-
-  const myPolls = polls.filter(poll => {
-    return poll.isCreator;
-  });
-
-  const activeMyPolls = myPolls.filter(poll => poll.isActive);
-  const closedMyPolls = myPolls.filter(poll => !poll.isActive);
-
-  // Render main content
-  return (
-    <Container maxW={containerWidth} py={8}>
-      <CreatePoll onPollCreated={handlePollUpdate} />
-      <Tabs variant="enclosed" colorScheme="brand" mt={8}>
-        <TabList bg={useColorModeValue('white', 'gray.800')} borderRadius="xl" p={2}>
-          <Tab _selected={{ bg: 'brand.500', color: 'white' }}>
-            Active Polls ({activePolls.length})
-          </Tab>
-          <Tab _selected={{ bg: 'brand.500', color: 'white' }}>
-            My Polls ({myPolls.length})
-          </Tab>
-        </TabList>
-
-        <TabPanels>
-          {/* Active Polls Panel */}
-          <TabPanel p={0} pt={6}>
-            <VStack spacing={8} align="stretch">
-              {activePolls.length === 0 ? (
-                <Alert
-                  status="info"
-                  variant="subtle"
-                  flexDirection="column"
-                  alignItems="center"
-                  justifyContent="center"
-                  textAlign="center"
-                  height="200px"
-                  borderRadius="xl"
-                  bg={useColorModeValue('white', 'gray.800')}
-                >
-                  <AlertIcon boxSize="40px" mb={4} />
-                  <Heading size="md" mb={2} color={useColorModeValue('gray.800', 'white')}>No Active Polls</Heading>
-                  <Text color={useColorModeValue('gray.600', 'gray.300')}>There are no active polls at the moment. Create one!</Text>
-                </Alert>
-              ) : (
-                activePolls.map(poll => (
-                  <Box key={poll.id}>
-                    {renderPollStatus(poll)}
-                    <Poll poll={poll} onVote={handlePollUpdate} />
-                  </Box>
-                ))
-              )}
-            </VStack>
-          </TabPanel>
-
-          {/* My Polls Panel */}
-          <TabPanel p={0} pt={6}>
-            <VStack spacing={8} align="stretch">
-              {myPolls.length === 0 ? (
-                <Alert
-                  status="info"
-                  variant="subtle"
-                  flexDirection="column"
-                  alignItems="center"
-                  justifyContent="center"
-                  textAlign="center"
-                  height="200px"
-                  borderRadius="xl"
-                  bg={useColorModeValue('white', 'gray.800')}
-                >
-                  <AlertIcon boxSize="40px" mb={4} />
-                  <Heading size="md" mb={2} color={useColorModeValue('gray.800', 'white')}>No Polls Created</Heading>
-                  <Text color={useColorModeValue('gray.600', 'gray.300')}>You haven't created any polls yet.</Text>
-                </Alert>
-              ) : (
-                <>
-                  {activeMyPolls.length > 0 && (
-                    <Box>
-                      <Heading size="md" mb={4} color={useColorModeValue('gray.800', 'white')}>Active</Heading>
-                      <VStack spacing={4} align="stretch">
-                        {activeMyPolls.map(poll => (
-                          <Box key={poll.id}>
-                            {renderPollStatus(poll)}
-                            <Poll poll={poll} onVote={handlePollUpdate} />
-                          </Box>
-                        ))}
-                      </VStack>
-                    </Box>
-                  )}
-                  {closedMyPolls.length > 0 && (
-                    <Box>
-                      <Heading size="md" mb={4} color={useColorModeValue('gray.800', 'white')}>Closed</Heading>
-                      <VStack spacing={4} align="stretch">
-                        {closedMyPolls.map(poll => (
-                          <Box key={poll.id}>
-                            {renderPollStatus(poll)}
-                            <Poll poll={poll} onVote={handlePollUpdate} />
-                          </Box>
-                        ))}
-                      </VStack>
-                    </Box>
-                  )}
-                </>
-              )}
-            </VStack>
-          </TabPanel>
-        </TabPanels>
-      </Tabs>
-    </Container>
+      )}
+    </Box>
   );
-}
+};
 
 export default PollList; 

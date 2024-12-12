@@ -23,8 +23,10 @@ import {
   Textarea,
   Divider,
   FormHelperText,
+  Tooltip,
+  Icon,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon } from '@chakra-ui/icons';
+import { AddIcon, DeleteIcon, InfoIcon } from '@chakra-ui/icons';
 import { useAccount, useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
@@ -35,7 +37,6 @@ const CreatePoll = ({ onPollCreated }) => {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
   const [isMultipleChoice, setIsMultipleChoice] = useState(false);
-  const [isWeighted, setIsWeighted] = useState(false);
   const [duration, setDuration] = useState('7');
   const [hasWhitelist, setHasWhitelist] = useState(false);
   const [whitelistAddresses, setWhitelistAddresses] = useState('');
@@ -75,7 +76,6 @@ const CreatePoll = ({ onPollCreated }) => {
       question.trim(),
       validOptions,
       deadline,
-      isWeighted,
       isMultipleChoice,
       hasWhitelist,
       rewardToken || ethers.constants.AddressZero,
@@ -117,14 +117,15 @@ const CreatePoll = ({ onPollCreated }) => {
       // If whitelist is enabled, update the whitelist
       if (hasWhitelist) {
         const addresses = parseWhitelistAddresses();
-        // Note: You'll need to implement the whitelist update call here
+        // Note: Whitelist update will be handled by a separate transaction
+        // to be implemented in the next update
       }
 
       resetForm();
       if (onPollCreated) {
         onPollCreated();
-        setTimeout(() => onPollCreated(), 1000);
-        setTimeout(() => onPollCreated(), 3000);
+        setTimeout(() => onPollCreated(), 2000);
+        setTimeout(() => onPollCreated(), 5000);
       }
     },
     onError: () => {
@@ -144,7 +145,6 @@ const CreatePoll = ({ onPollCreated }) => {
     setQuestion('');
     setOptions(['', '']);
     setIsMultipleChoice(false);
-    setIsWeighted(false);
     setDuration('7');
     setHasWhitelist(false);
     setWhitelistAddresses('');
@@ -194,6 +194,27 @@ const CreatePoll = ({ onPollCreated }) => {
       });
       return;
     }
+
+    if (hasWhitelist && parseWhitelistAddresses().length === 0) {
+      toast({
+        title: 'Error',
+        description: 'Please add at least one valid whitelist address',
+        status: 'error',
+        duration: 3000,
+      });
+      return;
+    }
+
+    if (rewardToken && !isValidRewardToken) {
+      toast({
+        title: 'Error',
+        description: 'Please enter a valid reward token address',
+        status: 'error',
+        duration: 3000,
+      });
+      return;
+    }
+
     createPoll();
   };
 
@@ -311,36 +332,22 @@ const CreatePoll = ({ onPollCreated }) => {
                 </Select>
               </FormControl>
 
-              <FormControl display="flex" alignItems="center">
-                <FormLabel mb="0" color={textColor}>Allow Multiple Choices</FormLabel>
-                <Switch
-                  colorScheme="brand"
-                  isChecked={isMultipleChoice}
-                  onChange={(e) => setIsMultipleChoice(e.target.checked)}
-                  isDisabled={isLoading}
-                  size="lg"
-                />
-              </FormControl>
-
-              <FormControl display="flex" alignItems="center">
-                <FormLabel mb="0" color={textColor}>Enable Token Weighting</FormLabel>
-                <Switch
-                  colorScheme="brand"
-                  isChecked={isWeighted}
-                  onChange={(e) => setIsWeighted(e.target.checked)}
-                  isDisabled={isLoading}
-                />
-              </FormControl>
-
               <Divider />
 
-              <FormControl display="flex" alignItems="center">
-                <FormLabel mb="0" color={textColor}>Enable Whitelist</FormLabel>
+              <FormControl>
+                <HStack justify="space-between">
+                  <FormLabel mb="0" color={textColor}>Enable Whitelist</FormLabel>
+                  <Tooltip label="Only whitelisted addresses will be able to vote">
+                    <Icon as={InfoIcon} color={mutedTextColor} />
+                  </Tooltip>
+                </HStack>
                 <Switch
                   colorScheme="brand"
                   isChecked={hasWhitelist}
                   onChange={(e) => setHasWhitelist(e.target.checked)}
                   isDisabled={isLoading}
+                  size="lg"
+                  mt={2}
                 />
               </FormControl>
 
@@ -365,7 +372,12 @@ const CreatePoll = ({ onPollCreated }) => {
               <Divider />
 
               <FormControl>
-                <FormLabel color={textColor}>Reward Token (Optional)</FormLabel>
+                <HStack justify="space-between">
+                  <FormLabel color={textColor}>Reward Token (Optional)</FormLabel>
+                  <Tooltip label="Token to reward voters with">
+                    <Icon as={InfoIcon} color={mutedTextColor} />
+                  </Tooltip>
+                </HStack>
                 <Input
                   placeholder="Enter reward token address"
                   value={rewardToken}
@@ -397,6 +409,25 @@ const CreatePoll = ({ onPollCreated }) => {
                   </FormHelperText>
                 </FormControl>
               )}
+
+              <Divider />
+
+              <FormControl>
+                <HStack justify="space-between">
+                  <FormLabel mb="0" color={textColor}>Allow Multiple Choices</FormLabel>
+                  <Tooltip label="Voters can select multiple options">
+                    <Icon as={InfoIcon} color={mutedTextColor} />
+                  </Tooltip>
+                </HStack>
+                <Switch
+                  colorScheme="brand"
+                  isChecked={isMultipleChoice}
+                  onChange={(e) => setIsMultipleChoice(e.target.checked)}
+                  isDisabled={isLoading}
+                  size="lg"
+                  mt={2}
+                />
+              </FormControl>
 
               <Button
                 width="full"

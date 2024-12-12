@@ -8,6 +8,7 @@ contract DePolls is ReentrancyGuard {
     struct Option {
         string text;
         uint256 voteCount;
+        mapping(address => bool) hasVoted;
     }
 
     struct Poll {
@@ -16,13 +17,11 @@ contract DePolls is ReentrancyGuard {
         string question;
         Option[] options;
         uint256 deadline;
-        bool isWeighted;
         bool isMultipleChoice;
         bool isActive;
         bool hasWhitelist;
         address rewardToken;
         uint256 rewardAmount;
-        mapping(address => bool) hasVoted;
         mapping(address => bool) isWhitelisted;
         address[] voters;
     }
@@ -35,7 +34,6 @@ contract DePolls is ReentrancyGuard {
         address indexed creator,
         string question,
         uint256 deadline,
-        bool isWeighted,
         bool isMultipleChoice,
         bool hasWhitelist,
         address rewardToken,
@@ -66,7 +64,6 @@ contract DePolls is ReentrancyGuard {
         string memory _question,
         string[] memory _options,
         uint256 _deadline,
-        bool _isWeighted,
         bool _isMultipleChoice,
         bool _hasWhitelist,
         address _rewardToken,
@@ -89,7 +86,6 @@ contract DePolls is ReentrancyGuard {
         newPoll.creator = msg.sender;
         newPoll.question = _question;
         newPoll.deadline = _deadline;
-        newPoll.isWeighted = _isWeighted;
         newPoll.isMultipleChoice = _isMultipleChoice;
         newPoll.isActive = true;
         newPoll.hasWhitelist = _hasWhitelist;
@@ -97,10 +93,8 @@ contract DePolls is ReentrancyGuard {
         newPoll.rewardAmount = _rewardAmount;
 
         for (uint i = 0; i < _options.length; i++) {
-            newPoll.options.push(Option({
-                text: _options[i],
-                voteCount: 0
-            }));
+            newPoll.options.push();
+            newPoll.options[i].text = _options[i];
         }
 
         emit PollCreated(
@@ -108,7 +102,6 @@ contract DePolls is ReentrancyGuard {
             msg.sender,
             _question,
             _deadline,
-            _isWeighted,
             _isMultipleChoice,
             _hasWhitelist,
             _rewardToken,
@@ -139,7 +132,12 @@ contract DePolls is ReentrancyGuard {
         nonReentrant
     {
         Poll storage poll = polls[_pollId];
-        require(!poll.hasVoted[msg.sender], "Already voted");
+        
+        // Check if voter has already voted for any option
+        for (uint i = 0; i < poll.options.length; i++) {
+            require(!poll.options[i].hasVoted[msg.sender], "Already voted");
+        }
+
         require(_optionIndices.length > 0, "Must vote for at least one option");
         
         if (!poll.isMultipleChoice) {
@@ -153,9 +151,9 @@ contract DePolls is ReentrancyGuard {
         for (uint i = 0; i < _optionIndices.length; i++) {
             require(_optionIndices[i] < poll.options.length, "Invalid option index");
             poll.options[_optionIndices[i]].voteCount++;
+            poll.options[_optionIndices[i]].hasVoted[msg.sender] = true;
         }
 
-        poll.hasVoted[msg.sender] = true;
         poll.voters.push(msg.sender);
 
         emit Voted(_pollId, msg.sender, _optionIndices);
@@ -177,7 +175,17 @@ contract DePolls is ReentrancyGuard {
         nonReentrant
     {
         Poll storage poll = polls[_pollId];
-        require(poll.hasVoted[msg.sender], "Haven't voted in this poll");
+        bool hasVoted = false;
+        
+        // Check if user has voted in any option
+        for (uint i = 0; i < poll.options.length; i++) {
+            if (poll.options[i].hasVoted[msg.sender]) {
+                hasVoted = true;
+                break;
+            }
+        }
+        
+        require(hasVoted, "Haven't voted in this poll");
         require(poll.rewardAmount > 0, "No reward for this poll");
         require(poll.rewardToken != address(0), "No reward token set");
         
@@ -195,9 +203,9 @@ contract DePolls is ReentrancyGuard {
         uint256 id,
         address creator,
         string memory question,
-        Option[] memory options,
+        string[] memory optionTexts,
+        uint256[] memory optionVotes,
         uint256 deadline,
-        bool isWeighted,
         bool isMultipleChoice,
         bool isActive,
         bool hasWhitelist,
@@ -206,13 +214,22 @@ contract DePolls is ReentrancyGuard {
     ) {
         require(_pollId < pollCount, "Poll does not exist");
         Poll storage poll = polls[_pollId];
+        
+        optionTexts = new string[](poll.options.length);
+        optionVotes = new uint256[](poll.options.length);
+        
+        for (uint i = 0; i < poll.options.length; i++) {
+            optionTexts[i] = poll.options[i].text;
+            optionVotes[i] = poll.options[i].voteCount;
+        }
+
         return (
             poll.id,
             poll.creator,
             poll.question,
-            poll.options,
+            optionTexts,
+            optionVotes,
             poll.deadline,
-            poll.isWeighted,
             poll.isMultipleChoice,
             poll.isActive,
             poll.hasWhitelist,
@@ -229,7 +246,13 @@ contract DePolls is ReentrancyGuard {
 
     function hasVoted(uint256 _pollId, address _voter) external view returns (bool) {
         require(_pollId < pollCount, "Poll does not exist");
-        return polls[_pollId].hasVoted[_voter];
+        Poll storage poll = polls[_pollId];
+        for (uint i = 0; i < poll.options.length; i++) {
+            if (poll.options[i].hasVoted[_voter]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function isWhitelisted(uint256 _pollId, address _voter) external view returns (bool) {
