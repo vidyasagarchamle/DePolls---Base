@@ -51,21 +51,41 @@ const Poll = ({ poll, onVote, onClose }) => {
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const hoverBg = useColorModeValue('gray.50', 'gray.700');
 
-  const { write: vote, data: voteData } = useContractWrite({
+  const { write: vote, data: voteData, isLoading: isVoting } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'vote',
+    onError: (error) => {
+      setIsSubmitting(false);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to submit vote',
+        status: 'error',
+        duration: 5000,
+      });
+    }
   });
 
-  const { write: closePoll, data: closeData } = useContractWrite({
+  const { write: closePoll, data: closeData, isLoading: isClosing } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'closePoll',
+    onError: (error) => {
+      setIsSubmitting(false);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to close poll',
+        status: 'error',
+        duration: 5000,
+      });
+    }
   });
 
-  const { isLoading: isVoting } = useWaitForTransaction({
+  useWaitForTransaction({
     hash: voteData?.hash,
     onSuccess: () => {
+      setIsSubmitting(false);
+      setSelectedOptions([]);
       toast({
         title: 'Success',
         description: 'Your vote has been recorded',
@@ -75,6 +95,7 @@ const Poll = ({ poll, onVote, onClose }) => {
       if (onVote) onVote();
     },
     onError: (error) => {
+      setIsSubmitting(false);
       console.error('Vote transaction error:', error);
       toast({
         title: 'Error',
@@ -85,9 +106,10 @@ const Poll = ({ poll, onVote, onClose }) => {
     },
   });
 
-  const { isLoading: isClosing } = useWaitForTransaction({
+  useWaitForTransaction({
     hash: closeData?.hash,
     onSuccess: () => {
+      setIsSubmitting(false);
       toast({
         title: 'Success',
         description: 'Poll has been closed',
@@ -97,6 +119,7 @@ const Poll = ({ poll, onVote, onClose }) => {
       if (onClose) onClose();
     },
     onError: (error) => {
+      setIsSubmitting(false);
       console.error('Close poll transaction error:', error);
       toast({
         title: 'Error',
@@ -124,6 +147,7 @@ const Poll = ({ poll, onVote, onClose }) => {
         args: [BigInt(poll.id), selectedOptions.map(i => BigInt(i))],
       });
     } catch (error) {
+      setIsSubmitting(false);
       console.error('Error voting:', error);
       toast({
         title: 'Error',
@@ -131,7 +155,6 @@ const Poll = ({ poll, onVote, onClose }) => {
         status: 'error',
         duration: 5000,
       });
-      setIsSubmitting(false);
     }
   }, [poll.id, selectedOptions, vote, toast]);
 
@@ -142,6 +165,7 @@ const Poll = ({ poll, onVote, onClose }) => {
         args: [BigInt(poll.id)],
       });
     } catch (error) {
+      setIsSubmitting(false);
       console.error('Error closing poll:', error);
       toast({
         title: 'Error',
@@ -149,7 +173,6 @@ const Poll = ({ poll, onVote, onClose }) => {
         status: 'error',
         duration: 5000,
       });
-      setIsSubmitting(false);
     }
   }, [poll.id, closePoll, toast]);
 
@@ -166,6 +189,8 @@ const Poll = ({ poll, onVote, onClose }) => {
       overflow="hidden"
       transition="all 0.2s"
       _hover={{ borderColor: 'brand.500' }}
+      opacity={isSubmitting ? 0.7 : 1}
+      pointerEvents={isSubmitting ? 'none' : 'auto'}
     >
       <CardHeader>
         <Flex align="center">
@@ -296,8 +321,9 @@ const Poll = ({ poll, onVote, onClose }) => {
             <Button
               colorScheme="brand"
               isLoading={isSubmitting || isVoting}
+              loadingText={isVoting ? 'Submitting Vote...' : 'Processing...'}
               onClick={handleVote}
-              isDisabled={selectedOptions.length === 0}
+              isDisabled={selectedOptions.length === 0 || isSubmitting}
             >
               Submit Vote
             </Button>
@@ -308,7 +334,9 @@ const Poll = ({ poll, onVote, onClose }) => {
               colorScheme="red"
               variant="outline"
               isLoading={isSubmitting || isClosing}
+              loadingText={isClosing ? 'Closing Poll...' : 'Processing...'}
               onClick={handleClose}
+              isDisabled={isSubmitting}
             >
               Close Poll
             </Button>

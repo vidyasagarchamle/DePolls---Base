@@ -11,12 +11,15 @@ import {
   Container,
   Card,
   CardHeader,
+  CardBody,
   Heading,
   Alert,
   AlertIcon,
   Link,
+  Icon,
+  Flex,
 } from '@chakra-ui/react';
-import { RepeatIcon, ExternalLinkIcon } from '@chakra-ui/icons';
+import { RepeatIcon, AddIcon, ExternalLinkIcon } from '@chakra-ui/icons';
 import { useContractRead, useAccount, usePublicClient, useNetwork, useSwitchNetwork } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import Poll from './Poll';
@@ -326,25 +329,24 @@ const PollList = () => {
           overflow="hidden"
         >
           <CardHeader pb={0}>
-            <Heading size="md">Polls</Heading>
-            <Button
-              leftIcon={<RepeatIcon />}
-              onClick={handleRefresh}
-              isLoading={isLoading}
-              variant="ghost"
-              size="sm"
-            >
-              Refresh
-            </Button>
+            <Flex justify="space-between" align="center">
+              <Heading size="md">Polls</Heading>
+              {polls.length > 0 && (
+                <Button
+                  leftIcon={<RepeatIcon />}
+                  onClick={handleRefresh}
+                  isLoading={isLoading}
+                  variant="ghost"
+                  size="sm"
+                >
+                  Refresh
+                </Button>
+              )}
+            </Flex>
           </CardHeader>
 
-          <Box p={6}>
-            {error ? (
-              <Alert status="info" borderRadius="lg">
-                <AlertIcon />
-                <Text>{error}</Text>
-              </Alert>
-            ) : isLoading ? (
+          <CardBody>
+            {isLoading ? (
               <Center py={8}>
                 <Spinner size="xl" color="brand.500" thickness="4px" />
               </Center>
@@ -354,8 +356,34 @@ const PollList = () => {
                   <Poll key={poll.id} poll={poll} onVote={handleRefresh} onClose={handleRefresh} />
                 ))}
               </VStack>
-            ) : null}
-          </Box>
+            ) : (
+              <Center py={12} px={6}>
+                <VStack spacing={4} textAlign="center">
+                  <Icon as={AddIcon} w={12} h={12} color="gray.400" />
+                  <VStack spacing={2}>
+                    <Heading size="md" color="gray.500">No Polls Yet</Heading>
+                    <Text color="gray.500" maxW="md">
+                      Be the first to create a poll and start gathering opinions from the community.
+                    </Text>
+                  </VStack>
+                  <Button
+                    colorScheme="brand"
+                    size="lg"
+                    leftIcon={<AddIcon />}
+                    onClick={() => {
+                      // Scroll to CreatePoll component
+                      window.scrollTo({
+                        top: 0,
+                        behavior: 'smooth'
+                      });
+                    }}
+                  >
+                    Create Your First Poll
+                  </Button>
+                </VStack>
+              </Center>
+            )}
+          </CardBody>
         </Card>
       </Container>
     </ErrorBoundary>

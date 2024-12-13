@@ -47,6 +47,7 @@ const CreatePoll = ({ onPollCreated }) => {
     deadline: false,
     whitelist: false
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toast = useToast();
   const { chain } = useNetwork();
@@ -117,15 +118,11 @@ const CreatePoll = ({ onPollCreated }) => {
     args: getContractArgs(),
     enabled: isFormValid() && !isWrongNetwork,
     chainId: 84532,
-    onError: (error) => {
-      console.error('Error preparing contract write:', error);
-    }
   });
 
-  const { write: createPoll, data: createData, isLoading: isCreating, error: writeError } = useContractWrite({
+  const { write: createPoll, data: createData, isLoading: isCreating } = useContractWrite({
     ...createConfig,
     onSuccess: (data) => {
-      console.log('Create poll transaction sent:', data);
       toast({
         title: 'Creating Poll',
         description: 'Your poll is being created...',
@@ -135,11 +132,8 @@ const CreatePoll = ({ onPollCreated }) => {
       });
     },
     onError: (error) => {
-      console.error('Contract write error:', {
-        error,
-        message: error.message,
-        code: error.code
-      });
+      setIsSubmitting(false);
+      console.error('Contract write error:', error);
       let errorMessage = 'Failed to create poll';
 
       if (error.message.toLowerCase().includes("user rejected")) {
@@ -159,8 +153,8 @@ const CreatePoll = ({ onPollCreated }) => {
 
   const { isLoading: isWaitingCreate } = useWaitForTransaction({
     hash: createData?.hash,
-    onSuccess: (data) => {
-      console.log('Create poll transaction confirmed:', data);
+    onSuccess: () => {
+      setIsSubmitting(false);
       toast.close('creating-poll');
       toast({
         title: 'Success!',
@@ -183,11 +177,11 @@ const CreatePoll = ({ onPollCreated }) => {
       });
       // Notify parent
       if (onPollCreated) {
-        console.log('Notifying parent of poll creation');
         onPollCreated();
       }
     },
     onError: (error) => {
+      setIsSubmitting(false);
       console.error('Transaction error:', error);
       toast({
         title: 'Error',
@@ -195,17 +189,11 @@ const CreatePoll = ({ onPollCreated }) => {
         status: 'error',
         duration: 5000,
       });
-    }
+    },
   });
 
   const handleCreatePoll = async () => {
     if (!isFormValid()) {
-      console.log('Form validation failed:', {
-        hasQuestion: !!question.trim(),
-        validOptionsCount: getValidOptions().length,
-        hasValidDeadline: getDeadlineTimestamp() > BigInt(Math.floor(Date.now() / 1000)),
-        hasValidWhitelist: !hasWhitelist || whitelistedAddresses.some(addr => ethers.utils.isAddress(addr))
-      });
       setTouched({
         question: true,
         options: true,
@@ -219,9 +207,10 @@ const CreatePoll = ({ onPollCreated }) => {
       if (!createPoll) {
         throw new Error('Create poll function not available');
       }
-      console.log('Creating poll with args:', getContractArgs());
+      setIsSubmitting(true);
       await createPoll();
     } catch (error) {
+      setIsSubmitting(false);
       console.error('Create poll error:', error);
       toast({
         title: 'Error',
@@ -253,7 +242,21 @@ const CreatePoll = ({ onPollCreated }) => {
     setTouched(prev => ({ ...prev, [field]: true }));
   };
 
-  const isLoading = isCreating || isWaitingCreate;
+  const handleAddWhitelistAddress = () => {
+    setWhitelistedAddresses(prev => [...prev, '']);
+    setTouched(prev => ({ ...prev, whitelist: true }));
+  };
+
+  const handleRemoveWhitelistAddress = (index) => {
+    if (whitelistedAddresses.length <= 1) return;
+    setWhitelistedAddresses(prev => prev.filter((_, i) => i !== index));
+    setTouched(prev => ({ ...prev, whitelist: true }));
+  };
+
+  const handleWhitelistAddressChange = (index, value) => {
+    setWhitelistedAddresses(prev => prev.map((addr, i) => i === index ? value : addr));
+    setTouched(prev => ({ ...prev, whitelist: true }));
+  };
 
   return (
     <Card
@@ -263,6 +266,8 @@ const CreatePoll = ({ onPollCreated }) => {
       borderWidth="1px"
       borderColor={borderColor}
       overflow="hidden"
+      opacity={isSubmitting ? 0.7 : 1}
+      pointerEvents={isSubmitting ? 'none' : 'auto'}
     >
       <CardHeader pb={0}>
         <Heading size="md" color={textColor}>Create a New Poll</Heading>
@@ -299,7 +304,7 @@ const CreatePoll = ({ onPollCreated }) => {
               onBlur={() => handleBlur('question')}
               placeholder="What would you like to ask?"
               resize="vertical"
-              disabled={isLoading}
+              disabled={isSubmitting || isCreating || isWaitingCreate}
               maxLength={200}
               borderRadius="lg"
               bg={inputBg}
@@ -327,7 +332,7 @@ const CreatePoll = ({ onPollCreated }) => {
                     onChange={(e) => handleOptionChange(index, e.target.value)}
                     onBlur={() => handleBlur('options')}
                     placeholder={`Option ${index + 1}`}
-                    disabled={isLoading}
+                    disabled={isSubmitting || isCreating || isWaitingCreate}
                     borderRadius="lg"
                     bg={inputBg}
                     color={textColor}
@@ -337,7 +342,7 @@ const CreatePoll = ({ onPollCreated }) => {
                     <IconButton
                       icon={<CloseIcon />}
                       onClick={() => handleRemoveOption(index)}
-                      disabled={isLoading}
+                      disabled={isSubmitting || isCreating || isWaitingCreate}
                       variant="ghost"
                       colorScheme="red"
                       size="sm"
@@ -351,7 +356,7 @@ const CreatePoll = ({ onPollCreated }) => {
                   onClick={handleAddOption}
                   variant="ghost"
                   size="sm"
-                  disabled={isLoading}
+                  disabled={isSubmitting || isCreating || isWaitingCreate}
                   color={accentColor}
                 >
                   Add Option
@@ -376,7 +381,7 @@ const CreatePoll = ({ onPollCreated }) => {
               onChange={(e) => setDeadline(e.target.value)}
               onBlur={() => handleBlur('deadline')}
               min={new Date(Date.now() + 300000).toISOString().slice(0, 16)}
-              disabled={isLoading}
+              disabled={isSubmitting || isCreating || isWaitingCreate}
               borderRadius="lg"
               bg={inputBg}
               color={textColor}
@@ -395,37 +400,112 @@ const CreatePoll = ({ onPollCreated }) => {
           </FormControl>
 
           <FormControl>
-            <FormLabel fontWeight="medium" color={textColor}>Multiple Choice</FormLabel>
-            <Switch
-              isChecked={isMultipleChoice}
-              onChange={(e) => setIsMultipleChoice(e.target.checked)}
-              disabled={isLoading}
-              colorScheme="brand"
-            />
-            <FormHelperText color={mutedColor}>
-              Allow voters to select multiple options
-            </FormHelperText>
+            <HStack justify="space-between" spacing={4}>
+              <Box>
+                <FormLabel mb="0" color={textColor}>Multiple Choice</FormLabel>
+                <FormHelperText color={mutedColor}>Allow selecting multiple options</FormHelperText>
+              </Box>
+              <Switch
+                isChecked={isMultipleChoice}
+                onChange={(e) => setIsMultipleChoice(e.target.checked)}
+                disabled={isSubmitting || isCreating || isWaitingCreate}
+                colorScheme="brand"
+                size="lg"
+              />
+            </HStack>
           </FormControl>
 
-          <Button
-            colorScheme="brand"
-            size="lg"
-            isLoading={isLoading}
-            loadingText="Creating Poll..."
-            onClick={handleCreatePoll}
-            isDisabled={!isFormValid() || isWrongNetwork}
-            w="full"
-          >
-            Create Poll
-          </Button>
+          <FormControl>
+            <HStack justify="space-between" spacing={4}>
+              <Box>
+                <FormLabel mb="0" color={textColor}>Enable Whitelist</FormLabel>
+                <FormHelperText color={mutedColor}>Restrict voting to specific addresses</FormHelperText>
+              </Box>
+              <Switch
+                isChecked={hasWhitelist}
+                onChange={(e) => setHasWhitelist(e.target.checked)}
+                disabled={isSubmitting || isCreating || isWaitingCreate}
+                colorScheme="brand"
+                size="lg"
+              />
+            </HStack>
+          </FormControl>
 
-          {prepareError && (
-            <Alert status="error" borderRadius="lg">
-              <AlertIcon />
-              <Text>Error preparing transaction: {prepareError.message}</Text>
-            </Alert>
+          {hasWhitelist && (
+            <FormControl 
+              isInvalid={touched.whitelist && hasWhitelist && whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr)).length === 0}
+            >
+              <FormLabel color={textColor} fontSize="sm">Whitelisted Addresses</FormLabel>
+              <VStack spacing={3} align="stretch">
+                {whitelistedAddresses.map((address, index) => (
+                  <HStack key={index}>
+                    <Input
+                      value={address}
+                      onChange={(e) => handleWhitelistAddressChange(index, e.target.value)}
+                      onBlur={() => handleBlur('whitelist')}
+                      placeholder="0x..."
+                      disabled={isSubmitting || isCreating || isWaitingCreate}
+                      isInvalid={touched.whitelist && address && !ethers.utils.isAddress(address)}
+                      borderRadius="lg"
+                      bg={inputBg}
+                      color={textColor}
+                      _focus={{ borderColor: accentColor, boxShadow: 'none' }}
+                    />
+                    {index > 0 && (
+                      <IconButton
+                        icon={<CloseIcon />}
+                        onClick={() => handleRemoveWhitelistAddress(index)}
+                        variant="ghost"
+                        colorScheme="red"
+                        disabled={isSubmitting || isCreating || isWaitingCreate}
+                        size="sm"
+                      />
+                    )}
+                  </HStack>
+                ))}
+                <Button
+                  leftIcon={<AddIcon />}
+                  onClick={handleAddWhitelistAddress}
+                  variant="ghost"
+                  size="sm"
+                  disabled={isSubmitting || isCreating || isWaitingCreate}
+                  color={accentColor}
+                >
+                  Add Address
+                </Button>
+              </VStack>
+              {touched.whitelist && hasWhitelist && whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr)).length === 0 && (
+                <FormHelperText color="red.500">
+                  At least one valid address is required for whitelist
+                </FormHelperText>
+              )}
+            </FormControl>
           )}
         </VStack>
+
+        <Button
+          mt={6}
+          colorScheme="brand"
+          size="lg"
+          isLoading={isSubmitting || isCreating || isWaitingCreate}
+          loadingText={
+            isWaitingCreate ? 'Creating Poll...' :
+            isCreating ? 'Confirming Transaction...' :
+            'Processing...'
+          }
+          onClick={handleCreatePoll}
+          isDisabled={!isFormValid() || isWrongNetwork || isSubmitting}
+          w="full"
+        >
+          Create Poll
+        </Button>
+
+        {prepareError && (
+          <Alert status="error" borderRadius="lg" mt={4}>
+            <AlertIcon />
+            <Text>Error preparing transaction: {prepareError.message}</Text>
+          </Alert>
+        )}
       </CardBody>
     </Card>
   );

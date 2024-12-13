@@ -13,11 +13,6 @@ const theme = extendTheme({
     global: (props) => ({
       body: {
         bg: props.colorMode === 'dark' ? 'gray.900' : 'gray.50',
-        backgroundImage: props.colorMode === 'dark' 
-          ? 'radial-gradient(circle at 1px 1px, #2D3748 1px, transparent 0)' 
-          : 'radial-gradient(circle at 1px 1px, #E2E8F0 1px, transparent 0)',
-        backgroundSize: '40px 40px',
-        transition: 'all 0.2s ease-in-out',
       },
     }),
   },
@@ -36,19 +31,23 @@ const theme = extendTheme({
     },
   },
   components: {
-    Box: {
+    Card: {
       baseStyle: {
-        transition: 'all 0.2s ease-in-out',
-      },
-    },
-    Text: {
-      baseStyle: {
-        transition: 'color 0.2s ease-in-out',
-      },
-    },
-    Heading: {
-      baseStyle: {
-        transition: 'color 0.2s ease-in-out',
+        container: {
+          bg: props => props.colorMode === 'dark' ? 'gray.800' : 'white',
+          borderRadius: 'xl',
+          borderWidth: '1px',
+          borderColor: props => props.colorMode === 'dark' ? 'gray.700' : 'gray.200',
+          boxShadow: 'lg',
+          p: 6,
+          _hover: {
+            borderColor: 'brand.500',
+            transform: 'translateY(-2px)',
+            boxShadow: 'xl',
+            transition: 'all 0.2s',
+          },
+          transition: 'all 0.2s',
+        },
       },
     },
     Button: {
@@ -62,6 +61,7 @@ const theme = extendTheme({
           _hover: {
             bg: 'brand.600',
             transform: 'translateY(-2px)',
+            boxShadow: 'lg',
           },
           _active: {
             bg: 'brand.700',
@@ -72,32 +72,8 @@ const theme = extendTheme({
           color: 'gray.600',
           _hover: {
             bg: 'gray.100',
+            transform: 'translateY(-1px)',
           },
-        },
-      },
-      baseStyle: {
-        _hover: {
-          transform: 'translateY(-2px)',
-          transition: 'all 0.2s',
-        },
-      },
-    },
-    Card: {
-      baseStyle: {
-        container: {
-          bg: 'white',
-          borderRadius: 'xl',
-          borderWidth: '1px',
-          borderColor: 'gray.200',
-          boxShadow: 'sm',
-          p: 6,
-          _hover: {
-            borderColor: 'brand.500',
-            transform: 'translateY(-4px)',
-            boxShadow: 'md',
-            transition: 'all 0.2s',
-          },
-          transition: 'all 0.2s',
         },
       },
     },
@@ -105,54 +81,25 @@ const theme = extendTheme({
       variants: {
         subtle: {
           container: {
-            bg: 'white',
             borderWidth: '1px',
             borderColor: 'gray.200',
             borderRadius: 'xl',
           },
         },
       },
-      baseStyle: {
-        container: {
-          transition: 'all 0.2s ease-in-out',
-        },
-      },
     },
     Modal: {
       baseStyle: {
-        overlay: {
-          bg: 'blackAlpha.600',
-          backdropFilter: 'blur(4px)',
-        },
         dialog: {
-          bg: 'white',
           borderRadius: 'xl',
           boxShadow: 'xl',
-          transition: 'all 0.2s ease-in-out',
         },
-      },
-    },
-    Tooltip: {
-      baseStyle: {
-        bg: 'gray.800',
-        color: 'white',
-        borderRadius: 'md',
-      },
-    },
-    Badge: {
-      baseStyle: {
-        borderRadius: 'full',
-        px: 3,
-        py: 1,
-        textTransform: 'none',
-        fontWeight: 'medium',
       },
     },
     Input: {
       variants: {
         outline: {
           field: {
-            bg: 'white',
             borderColor: 'gray.300',
             _hover: {
               borderColor: 'brand.500',
@@ -165,24 +112,16 @@ const theme = extendTheme({
         },
       },
     },
-    Checkbox: {
-      baseStyle: {
-        control: {
+    Textarea: {
+      variants: {
+        outline: {
           borderColor: 'gray.300',
-          _checked: {
-            bg: 'brand.500',
+          _hover: {
             borderColor: 'brand.500',
           },
-        },
-      },
-    },
-    Radio: {
-      baseStyle: {
-        control: {
-          borderColor: 'gray.300',
-          _checked: {
-            bg: 'brand.500',
+          _focus: {
             borderColor: 'brand.500',
+            boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)',
           },
         },
       },
