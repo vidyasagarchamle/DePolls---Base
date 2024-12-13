@@ -9,7 +9,7 @@ const Logo = ({ width = "150px", height = "40px" }) => {
   );
 
   return (
-    <Box w={width} h={height}>
+    <Box w={width} h={height} cursor="pointer" _hover={{ transform: 'scale(1.05)' }} transition="all 0.2s">
       <svg
         width="100%"
         height="100%"
