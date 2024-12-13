@@ -1,122 +1,64 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
+  Container,
   VStack,
-  Box,
-  Text,
+  Heading,
   Button,
-  useToast,
   Spinner,
   Center,
-  useColorModeValue,
-  Container,
+  useToast,
   Card,
   CardHeader,
   CardBody,
-  Heading,
-  Alert,
-  AlertIcon,
-  Link,
-  Icon,
   Flex,
+  Text,
+  Icon,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  Badge,
+  useColorModeValue,
+  Box,
+  HStack,
 } from '@chakra-ui/react';
-import { RepeatIcon, AddIcon, ExternalLinkIcon } from '@chakra-ui/icons';
-import { useContractRead, useAccount, usePublicClient, useNetwork, useSwitchNetwork } from 'wagmi';
+import { AddIcon, RepeatIcon, UserIcon } from '@chakra-ui/icons';
+import { useAccount, useContractRead, usePublicClient } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import Poll from './Poll';
 import CreatePoll from './CreatePoll';
-
-// Custom error boundary component
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('PollList Error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <Alert status="error" borderRadius="lg">
-          <AlertIcon />
-          <Box>
-            <Text>Something went wrong loading the polls.</Text>
-            <Button
-              size="sm"
-              colorScheme="red"
-              mt={2}
-              onClick={() => {
-                this.setState({ hasError: false, error: null });
-                if (this.props.onRetry) {
-                  this.props.onRetry();
-                }
-              }}
-            >
-              Try Again
-            </Button>
-          </Box>
-        </Alert>
-      );
-    }
-
-    return this.props.children;
-  }
-}
+import ErrorBoundary from './ErrorBoundary';
 
 const PollList = () => {
+  const { address } = useAccount();
   const [polls, setPolls] = useState([]);
+  const [userPolls, setUserPolls] = useState([]);
+  const [activePolls, setActivePolls] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const toast = useToast();
-  const { address } = useAccount();
   const publicClient = usePublicClient();
-  const { chain } = useNetwork();
-  const { switchNetwork } = useSwitchNetwork();
 
   const bgColor = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.100', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const tabBg = useColorModeValue('gray.50', 'gray.700');
+  const activeBg = useColorModeValue('white', 'gray.800');
+  const mutedColor = useColorModeValue('gray.600', 'gray.400');
+  const badgeBg = useColorModeValue('brand.100', 'brand.900');
+  const badgeColor = useColorModeValue('brand.800', 'brand.100');
 
-  // Check if we're on the right network (Base Sepolia)
-  const isWrongNetwork = chain?.id !== 84532;
-
-  // Get poll count with error handling
-  const { data: pollCount, refetch: refetchPollCount, isError: isPollCountError, error: pollCountError } = useContractRead({
+  const { data: pollCount, refetch: refetchPollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
-    onSuccess: (data) => {
-      try {
-        console.log('Poll count fetched successfully:', {
-          rawValue: data?.toString?.() || 'undefined',
-          numberValue: data ? Number(data) : 0
-        });
-      } catch (error) {
-        console.error('Error processing poll count:', error);
-      }
-    },
-    onError: (error) => {
-      console.error('Error fetching poll count:', {
-        error,
-        message: error?.message,
-        contractAddress: POLLS_CONTRACT_ADDRESS
-      });
-    }
   });
 
   const fetchPollDetails = useCallback(async (pollId) => {
     if (!publicClient) return null;
 
     try {
-      console.log(`Fetching poll ${pollId}...`);
-      
-      // Get poll data
       const pollData = await publicClient.readContract({
         address: POLLS_CONTRACT_ADDRESS,
         abi: DePollsABI,
@@ -124,18 +66,12 @@ const PollList = () => {
         args: [BigInt(pollId)]
       });
 
-      console.log(`Poll ${pollId} raw data:`, pollData);
-
-      // Map array response to object
       const [question, creator, deadline, isMultipleChoice, isActive, hasWhitelist, optionCount] = pollData;
 
       if (!creator || creator === '0x0000000000000000000000000000000000000000') {
-        console.log(`Poll ${pollId} is invalid or does not exist`);
         return null;
       }
 
-      // Get options
-      console.log(`Fetching options for poll ${pollId}...`);
       const optionsData = await publicClient.readContract({
         address: POLLS_CONTRACT_ADDRESS,
         abi: DePollsABI,
@@ -143,19 +79,15 @@ const PollList = () => {
         args: [BigInt(pollId)]
       });
 
-      console.log(`Poll ${pollId} options:`, optionsData);
-
       const options = optionsData.map(opt => ({
         text: opt.text,
         voteCount: Number(opt.voteCount)
       }));
 
-      // Get voting status
       let hasVoted = false;
       let isWhitelisted = !hasWhitelist;
 
       if (address && isActive) {
-        console.log(`Checking voting status for poll ${pollId}...`);
         hasVoted = await publicClient.readContract({
           address: POLLS_CONTRACT_ADDRESS,
           abi: DePollsABI,
@@ -171,10 +103,9 @@ const PollList = () => {
             args: [BigInt(pollId), address]
           });
         }
-        console.log(`Poll ${pollId} voting status:`, { hasVoted, isWhitelisted });
       }
 
-      const poll = {
+      return {
         id: pollId,
         question,
         creator,
@@ -188,9 +119,6 @@ const PollList = () => {
         isWhitelisted,
         totalVotes: options.reduce((acc, opt) => acc + Number(opt.voteCount), 0)
       };
-
-      console.log(`Poll ${pollId} processed:`, poll);
-      return poll;
     } catch (error) {
       console.error(`Error fetching poll ${pollId}:`, error);
       return null;
@@ -198,42 +126,30 @@ const PollList = () => {
   }, [publicClient, address]);
 
   const fetchPolls = useCallback(async () => {
-    if (!pollCount || !publicClient) {
-      console.log('Cannot fetch polls:', { pollCount: pollCount?.toString(), hasPublicClient: !!publicClient });
-      return;
-    }
+    if (!pollCount || !publicClient) return;
     
     setIsLoading(true);
     setError(null);
 
     try {
       const count = Number(pollCount);
-      console.log('Starting poll fetch with count:', count);
-
       if (count === 0) {
-        console.log('No polls found (count is 0)');
         setPolls([]);
-        setError('No polls found. Be the first to create one!');
         return;
       }
 
       const validPolls = [];
       const promises = [];
 
-      // Fetch the last 10 polls
       const startIndex = count - 1;
       const endIndex = Math.max(0, count - 10);
-      console.log(`Fetching polls from index ${startIndex} to ${endIndex}`);
 
       for (let i = startIndex; i >= endIndex; i--) {
         promises.push(
           fetchPollDetails(i)
             .then(poll => {
               if (poll && poll.question && poll.options.length > 0) {
-                console.log(`Successfully fetched valid poll ${i}:`, poll);
                 validPolls.push(poll);
-              } else {
-                console.log(`Skipping invalid poll ${i}`);
               }
             })
             .catch(error => {
@@ -244,75 +160,73 @@ const PollList = () => {
 
       await Promise.all(promises);
       validPolls.sort((a, b) => b.id - a.id);
-      
-      console.log(`Found ${validPolls.length} valid polls out of ${count} total polls:`, validPolls);
       setPolls(validPolls);
-
-      if (validPolls.length === 0) {
-        setError('No active polls found. Create one to get started!');
-      }
     } catch (error) {
       console.error('Error fetching polls:', error);
       setError('Failed to load polls. Please try again.');
+      toast({
+        title: 'Error',
+        description: 'Failed to load polls. Please try again.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [pollCount, publicClient, fetchPollDetails]);
-
-  // Add debug logging for dependencies
-  useEffect(() => {
-    console.log('Dependencies changed:', {
-      isWrongNetwork,
-      hasPollCount: !!pollCount,
-      pollCountValue: pollCount?.toString(),
-      hasPublicClient: !!publicClient,
-      currentAddress: address
-    });
-  }, [isWrongNetwork, pollCount, publicClient, address]);
+  }, [pollCount, publicClient, fetchPollDetails, toast]);
 
   useEffect(() => {
-    if (isWrongNetwork) {
-      setError('Please switch to Base Sepolia network to view polls.');
-    } else if (pollCount && publicClient) {
-      console.log('Triggering poll fetch...');
+    if (pollCount && publicClient) {
       fetchPolls();
     }
-  }, [isWrongNetwork, pollCount, publicClient, fetchPolls]);
+  }, [pollCount, publicClient, fetchPolls]);
+
+  useEffect(() => {
+    if (polls.length > 0 && address) {
+      const userCreated = polls.filter(poll => poll.creator.toLowerCase() === address.toLowerCase());
+      const active = polls.filter(poll => !poll.closed && poll.creator.toLowerCase() !== address.toLowerCase());
+      
+      setUserPolls(userCreated);
+      setActivePolls(active);
+    } else {
+      setUserPolls([]);
+      setActivePolls([]);
+    }
+  }, [polls, address]);
 
   const handleRefresh = useCallback(() => {
     setError(null);
     refetchPollCount();
   }, [refetchPollCount]);
 
-  const handleSwitchNetwork = () => {
-    if (switchNetwork) {
-      switchNetwork(84532);
-    } else {
-      window.open('https://docs.base.org/guides/deploy-smart-contracts', '_blank');
-    }
-  };
-
-  if (isWrongNetwork) {
-    return (
-      <Container maxW="container.lg" py={8}>
-        <Alert status="warning" borderRadius="lg">
-          <AlertIcon />
-          <Box>
-            <Text>Please switch to Base Sepolia network to view polls.</Text>
-            <Button
-              size="sm"
-              colorScheme="blue"
-              mt={2}
-              onClick={handleSwitchNetwork}
-              rightIcon={switchNetwork ? undefined : <ExternalLinkIcon />}
-            >
-              {switchNetwork ? 'Switch Network' : 'Learn How to Add Network'}
-            </Button>
-          </Box>
-        </Alert>
-      </Container>
-    );
-  }
+  const EmptyState = ({ message, actionLabel, onAction }) => (
+    <Center py={12} px={6}>
+      <VStack spacing={4} textAlign="center">
+        <Icon as={AddIcon} w={12} h={12} color="gray.400" />
+        <VStack spacing={2}>
+          <Text color={mutedColor} fontSize="lg" fontWeight="medium">
+            {message}
+          </Text>
+        </VStack>
+        {actionLabel && (
+          <Button
+            colorScheme="brand"
+            size="lg"
+            leftIcon={<AddIcon />}
+            onClick={onAction}
+            _hover={{
+              transform: 'translateY(-2px)',
+              boxShadow: 'lg',
+            }}
+            transition="all 0.2s"
+          >
+            {actionLabel}
+          </Button>
+        )}
+      </VStack>
+    </Center>
+  );
 
   return (
     <ErrorBoundary onRetry={handleRefresh}>
@@ -338,6 +252,12 @@ const PollList = () => {
                   isLoading={isLoading}
                   variant="ghost"
                   size="sm"
+                  color={mutedColor}
+                  _hover={{
+                    bg: tabBg,
+                    transform: 'rotate(180deg)',
+                  }}
+                  transition="all 0.3s"
                 >
                   Refresh
                 </Button>
@@ -351,37 +271,107 @@ const PollList = () => {
                 <Spinner size="xl" color="brand.500" thickness="4px" />
               </Center>
             ) : polls.length > 0 ? (
-              <VStack spacing={4} align="stretch">
-                {polls.map((poll) => (
-                  <Poll key={poll.id} poll={poll} onVote={handleRefresh} onClose={handleRefresh} />
-                ))}
-              </VStack>
-            ) : (
-              <Center py={12} px={6}>
-                <VStack spacing={4} textAlign="center">
-                  <Icon as={AddIcon} w={12} h={12} color="gray.400" />
-                  <VStack spacing={2}>
-                    <Heading size="md" color="gray.500">No Polls Yet</Heading>
-                    <Text color="gray.500" maxW="md">
-                      Be the first to create a poll and start gathering opinions from the community.
-                    </Text>
-                  </VStack>
-                  <Button
-                    colorScheme="brand"
-                    size="lg"
-                    leftIcon={<AddIcon />}
-                    onClick={() => {
-                      // Scroll to CreatePoll component
-                      window.scrollTo({
-                        top: 0,
-                        behavior: 'smooth'
-                      });
+              <Tabs isFitted variant="unstyled">
+                <TabList
+                  bg={tabBg}
+                  p={1}
+                  borderRadius="xl"
+                  mb={6}
+                >
+                  <Tab
+                    py={3}
+                    px={4}
+                    borderRadius="lg"
+                    _selected={{
+                      bg: activeBg,
+                      color: 'brand.500',
+                      fontWeight: '600',
+                      boxShadow: 'sm',
                     }}
+                    transition="all 0.2s"
                   >
-                    Create Your First Poll
-                  </Button>
-                </VStack>
-              </Center>
+                    <HStack spacing={2}>
+                      <Text>Active Polls</Text>
+                      {activePolls.length > 0 && (
+                        <Badge
+                          bg={badgeBg}
+                          color={badgeColor}
+                          borderRadius="full"
+                          px={2}
+                          fontSize="sm"
+                        >
+                          {activePolls.length}
+                        </Badge>
+                      )}
+                    </HStack>
+                  </Tab>
+                  <Tab
+                    py={3}
+                    px={4}
+                    borderRadius="lg"
+                    _selected={{
+                      bg: activeBg,
+                      color: 'brand.500',
+                      fontWeight: '600',
+                      boxShadow: 'sm',
+                    }}
+                    transition="all 0.2s"
+                  >
+                    <HStack spacing={2}>
+                      <Text>My Polls</Text>
+                      {userPolls.length > 0 && (
+                        <Badge
+                          bg={badgeBg}
+                          color={badgeColor}
+                          borderRadius="full"
+                          px={2}
+                          fontSize="sm"
+                        >
+                          {userPolls.length}
+                        </Badge>
+                      )}
+                    </HStack>
+                  </Tab>
+                </TabList>
+                <TabPanels>
+                  <TabPanel px={0}>
+                    {activePolls.length > 0 ? (
+                      <VStack spacing={4} align="stretch">
+                        {activePolls.map((poll) => (
+                          <Poll key={poll.id} poll={poll} onVote={handleRefresh} onClose={handleRefresh} />
+                        ))}
+                      </VStack>
+                    ) : (
+                      <EmptyState 
+                        message="No active polls available at the moment."
+                        actionLabel="Create New Poll"
+                        onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                      />
+                    )}
+                  </TabPanel>
+                  <TabPanel px={0}>
+                    {userPolls.length > 0 ? (
+                      <VStack spacing={4} align="stretch">
+                        {userPolls.map((poll) => (
+                          <Poll key={poll.id} poll={poll} onVote={handleRefresh} onClose={handleRefresh} />
+                        ))}
+                      </VStack>
+                    ) : (
+                      <EmptyState 
+                        message="You haven't created any polls yet."
+                        actionLabel="Create Your First Poll"
+                        onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                      />
+                    )}
+                  </TabPanel>
+                </TabPanels>
+              </Tabs>
+            ) : (
+              <EmptyState 
+                message="No polls available. Be the first to create a poll!"
+                actionLabel="Create Your First Poll"
+                onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              />
             )}
           </CardBody>
         </Card>
