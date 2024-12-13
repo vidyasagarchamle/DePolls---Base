@@ -23,8 +23,6 @@ import {
 import { useContractWrite, useWaitForTransaction, useSignTypedData, usePublicClient, useAccount } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import { DOMAIN } from '../contracts';
-import { ethers } from 'ethers';
-import { relayVote } from '../utils/relay';
 
 const formatTimeDistance = (timestamp) => {
   const now = Date.now();
@@ -56,6 +54,21 @@ const Poll = ({ poll, onVote, onClose }) => {
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const hoverBg = useColorModeValue('gray.50', 'gray.700');
 
+  const { write: vote } = useContractWrite({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'vote',
+  });
+
+  const { write: closePoll, data: closeData, isLoading: isClosing } = useContractWrite({
+    address: POLLS_CONTRACT_ADDRESS,
+    abi: DePollsABI,
+    functionName: 'closePoll',
+  });
+
+  useWaitForTransaction({
+    hash: closeData?.hash,
+    onSuccess: () => {
   // EIP-712 signature for gasless voting
   const { signTypedData } = useSignTypedData({
     domain: DOMAIN,

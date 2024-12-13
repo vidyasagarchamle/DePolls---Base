@@ -23,7 +23,7 @@ import {
   Box,
   HStack,
 } from '@chakra-ui/react';
-import { AddIcon, RepeatIcon, UserIcon } from '@chakra-ui/icons';
+import { AddIcon, RepeatIcon } from '@chakra-ui/icons';
 import { useAccount, useContractRead, usePublicClient } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import Poll from './Poll';
@@ -35,7 +35,7 @@ const PollList = () => {
   const [polls, setPolls] = useState([]);
   const [userPolls, setUserPolls] = useState([]);
   const [activePolls, setActivePolls] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const toast = useToast();
   const publicClient = usePublicClient();
@@ -45,14 +45,17 @@ const PollList = () => {
   const tabBg = useColorModeValue('gray.50', 'gray.700');
   const activeBg = useColorModeValue('white', 'gray.800');
   const mutedColor = useColorModeValue('gray.600', 'gray.400');
-  const badgeBg = useColorModeValue('brand.100', 'brand.900');
-  const badgeColor = useColorModeValue('brand.800', 'brand.100');
 
   const { data: pollCount, refetch: refetchPollCount } = useContractRead({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'pollCount',
     watch: true,
+    onError: (error) => {
+      console.error('Error fetching poll count:', error);
+      setError('Failed to connect to the network. Please check your connection and try again.');
+      setIsLoading(false);
+    }
   });
 
   const fetchPollDetails = useCallback(async (pollId) => {
@@ -87,7 +90,7 @@ const PollList = () => {
       let hasVoted = false;
       let isWhitelisted = !hasWhitelist;
 
-      if (address && isActive) {
+      if (address) {
         hasVoted = await publicClient.readContract({
           address: POLLS_CONTRACT_ADDRESS,
           abi: DePollsABI,
@@ -115,7 +118,6 @@ const PollList = () => {
         hasWhitelist,
         options,
         hasVoted,
-        isCreator: address && creator.toLowerCase() === address.toLowerCase(),
         isWhitelisted,
         totalVotes: options.reduce((acc, opt) => acc + Number(opt.voteCount), 0)
       };
@@ -126,7 +128,10 @@ const PollList = () => {
   }, [publicClient, address]);
 
   const fetchPolls = useCallback(async () => {
-    if (!pollCount || !publicClient) return;
+    if (!pollCount || !publicClient) {
+      setIsLoading(false);
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
@@ -135,16 +140,14 @@ const PollList = () => {
       const count = Number(pollCount);
       if (count === 0) {
         setPolls([]);
+        setIsLoading(false);
         return;
       }
 
       const validPolls = [];
       const promises = [];
 
-      const startIndex = count - 1;
-      const endIndex = Math.max(0, count - 10);
-
-      for (let i = startIndex; i >= endIndex; i--) {
+      for (let i = count - 1; i >= Math.max(0, count - 10); i--) {
         promises.push(
           fetchPollDetails(i)
             .then(poll => {
@@ -177,7 +180,7 @@ const PollList = () => {
   }, [pollCount, publicClient, fetchPollDetails, toast]);
 
   useEffect(() => {
-    if (pollCount && publicClient) {
+    if (publicClient) {
       fetchPolls();
     }
   }, [pollCount, publicClient, fetchPolls]);
@@ -185,7 +188,7 @@ const PollList = () => {
   useEffect(() => {
     if (polls.length > 0 && address) {
       const userCreated = polls.filter(poll => poll.creator.toLowerCase() === address.toLowerCase());
-      const active = polls.filter(poll => !poll.closed && poll.creator.toLowerCase() !== address.toLowerCase());
+      const active = polls.filter(poll => poll.isActive && poll.creator.toLowerCase() !== address.toLowerCase());
       
       setUserPolls(userCreated);
       setActivePolls(active);
@@ -228,6 +231,27 @@ const PollList = () => {
     </Center>
   );
 
+  if (error) {
+    return (
+      <Container maxW="container.lg" py={8}>
+        <Card bg={bgColor} borderRadius="xl" p={8}>
+          <Center>
+            <VStack spacing={4}>
+              <Text color="red.500" fontSize="lg">{error}</Text>
+              <Button
+                colorScheme="brand"
+                onClick={handleRefresh}
+                leftIcon={<RepeatIcon />}
+              >
+                Try Again
+              </Button>
+            </VStack>
+          </Center>
+        </Card>
+      </Container>
+    );
+  }
+
   return (
     <ErrorBoundary onRetry={handleRefresh}>
       <Container maxW="container.lg" py={8}>
@@ -248,16 +272,9 @@ const PollList = () => {
               {polls.length > 0 && (
                 <Button
                   leftIcon={<RepeatIcon />}
+                  variant="ghost"
                   onClick={handleRefresh}
                   isLoading={isLoading}
-                  variant="ghost"
-                  size="sm"
-                  color={mutedColor}
-                  _hover={{
-                    bg: tabBg,
-                    transform: 'rotate(180deg)',
-                  }}
-                  transition="all 0.3s"
                 >
                   Refresh
                 </Button>
@@ -270,108 +287,118 @@ const PollList = () => {
               <Center py={8}>
                 <Spinner size="xl" color="brand.500" thickness="4px" />
               </Center>
-            ) : polls.length > 0 ? (
-              <Tabs isFitted variant="unstyled">
+            ) : polls.length === 0 ? (
+              <EmptyState
+                message="No polls found. Create your first poll!"
+                actionLabel="Create Poll"
+                onAction={() => document.getElementById('create-poll-button')?.click()}
+              />
+            ) : (
+              <Tabs variant="soft-rounded" colorScheme="brand">
                 <TabList
                   bg={tabBg}
-                  p={1}
+                  p={2}
                   borderRadius="xl"
-                  mb={6}
+                  overflowX="auto"
+                  css={{
+                    scrollbarWidth: 'none',
+                    '::-webkit-scrollbar': { display: 'none' },
+                  }}
                 >
                   <Tab
-                    py={3}
-                    px={4}
+                    _selected={{ bg: activeBg }}
                     borderRadius="lg"
-                    _selected={{
-                      bg: activeBg,
-                      color: 'brand.500',
-                      fontWeight: '600',
-                      boxShadow: 'sm',
-                    }}
-                    transition="all 0.2s"
+                    px={4}
+                    py={2}
                   >
-                    <HStack spacing={2}>
-                      <Text>Active Polls</Text>
-                      {activePolls.length > 0 && (
-                        <Badge
-                          bg={badgeBg}
-                          color={badgeColor}
-                          borderRadius="full"
-                          px={2}
-                          fontSize="sm"
-                        >
+                    All Polls
+                    <Badge ml={2} colorScheme="brand">
+                      {polls.length}
+                    </Badge>
+                  </Tab>
+                  {address && (
+                    <>
+                      <Tab
+                        _selected={{ bg: activeBg }}
+                        borderRadius="lg"
+                        px={4}
+                        py={2}
+                      >
+                        Active Polls
+                        <Badge ml={2} colorScheme="green">
                           {activePolls.length}
                         </Badge>
-                      )}
-                    </HStack>
-                  </Tab>
-                  <Tab
-                    py={3}
-                    px={4}
-                    borderRadius="lg"
-                    _selected={{
-                      bg: activeBg,
-                      color: 'brand.500',
-                      fontWeight: '600',
-                      boxShadow: 'sm',
-                    }}
-                    transition="all 0.2s"
-                  >
-                    <HStack spacing={2}>
-                      <Text>My Polls</Text>
-                      {userPolls.length > 0 && (
-                        <Badge
-                          bg={badgeBg}
-                          color={badgeColor}
-                          borderRadius="full"
-                          px={2}
-                          fontSize="sm"
-                        >
+                      </Tab>
+                      <Tab
+                        _selected={{ bg: activeBg }}
+                        borderRadius="lg"
+                        px={4}
+                        py={2}
+                      >
+                        My Polls
+                        <Badge ml={2} colorScheme="purple">
                           {userPolls.length}
                         </Badge>
-                      )}
-                    </HStack>
-                  </Tab>
+                      </Tab>
+                    </>
+                  )}
                 </TabList>
+
                 <TabPanels>
                   <TabPanel px={0}>
-                    {activePolls.length > 0 ? (
-                      <VStack spacing={4} align="stretch">
-                        {activePolls.map((poll) => (
-                          <Poll key={poll.id} poll={poll} onVote={handleRefresh} onClose={handleRefresh} />
-                        ))}
-                      </VStack>
-                    ) : (
-                      <EmptyState 
-                        message="No active polls available at the moment."
-                        actionLabel="Create New Poll"
-                        onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                      />
-                    )}
+                    <VStack spacing={4} align="stretch">
+                      {polls.map(poll => (
+                        <Poll
+                          key={poll.id}
+                          poll={poll}
+                          onVote={handleRefresh}
+                          onClose={handleRefresh}
+                        />
+                      ))}
+                    </VStack>
                   </TabPanel>
-                  <TabPanel px={0}>
-                    {userPolls.length > 0 ? (
-                      <VStack spacing={4} align="stretch">
-                        {userPolls.map((poll) => (
-                          <Poll key={poll.id} poll={poll} onVote={handleRefresh} onClose={handleRefresh} />
-                        ))}
-                      </VStack>
-                    ) : (
-                      <EmptyState 
-                        message="You haven't created any polls yet."
-                        actionLabel="Create Your First Poll"
-                        onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                      />
-                    )}
-                  </TabPanel>
+                  {address && (
+                    <>
+                      <TabPanel px={0}>
+                        <VStack spacing={4} align="stretch">
+                          {activePolls.length > 0 ? (
+                            activePolls.map(poll => (
+                              <Poll
+                                key={poll.id}
+                                poll={poll}
+                                onVote={handleRefresh}
+                                onClose={handleRefresh}
+                              />
+                            ))
+                          ) : (
+                            <EmptyState message="No active polls found" />
+                          )}
+                        </VStack>
+                      </TabPanel>
+                      <TabPanel px={0}>
+                        <VStack spacing={4} align="stretch">
+                          {userPolls.length > 0 ? (
+                            userPolls.map(poll => (
+                              <Poll
+                                key={poll.id}
+                                poll={poll}
+                                onVote={handleRefresh}
+                                onClose={handleRefresh}
+                              />
+                            ))
+                          ) : (
+                            <EmptyState
+                              message="You haven't created any polls yet"
+                              actionLabel="Create Your First Poll"
+                              onAction={() => document.getElementById('create-poll-button')?.click()}
+                            />
+                          )}
+                        </VStack>
+                      </TabPanel>
+                    </>
+                  )}
                 </TabPanels>
               </Tabs>
-            ) : (
-              <EmptyState 
-                message="No polls available. Be the first to create a poll!"
-                actionLabel="Create Your First Poll"
-                onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              />
             )}
           </CardBody>
         </Card>
