@@ -1,32 +1,10 @@
-export const POLLS_CONTRACT_ADDRESS = "0x0e4cD2C0d49cC84f27c6Ff43cACC1CB84890c1Db";
+export const CONTRACT_ADDRESS = '0x741d20a99aeCd8d25A3FbD0F728807732827d77d';
 
-export const DePollsABI = [
+export const CONTRACT_ABI = [
   {
     "inputs": [],
     "stateMutability": "nonpayable",
     "type": "constructor"
-  },
-  {
-    "inputs": [],
-    "name": "InvalidShortString",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "str",
-        "type": "string"
-      }
-    ],
-    "name": "StringTooLong",
-    "type": "error"
-  },
-  {
-    "anonymous": false,
-    "inputs": [],
-    "name": "EIP712DomainChanged",
-    "type": "event"
   },
   {
     "anonymous": false,
@@ -138,12 +116,12 @@ export const DePollsABI = [
   },
   {
     "inputs": [],
-    "name": "pollCount",
+    "name": "getDomainSeparator",
     "outputs": [
       {
-        "internalType": "uint256",
+        "internalType": "bytes32",
         "name": "",
-        "type": "uint256"
+        "type": "bytes32"
       }
     ],
     "stateMutability": "view",
@@ -235,6 +213,25 @@ export const DePollsABI = [
         "internalType": "uint256",
         "name": "_pollId",
         "type": "uint256"
+      }
+    ],
+    "name": "getVoters",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_pollId",
+        "type": "uint256"
       },
       {
         "internalType": "address",
@@ -288,6 +285,115 @@ export const DePollsABI = [
         "internalType": "uint256[]",
         "name": "_optionIndexes",
         "type": "uint256[]"
+      },
+      {
+        "internalType": "uint8",
+        "name": "v",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "r",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "name": "metaVote",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "nonces",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pollCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "polls",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "question",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "deadline",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "isMultipleChoice",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "hasWhitelist",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_pollId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "_optionIndexes",
+        "type": "uint256[]"
       }
     ],
     "name": "vote",
@@ -295,4 +401,4 @@ export const DePollsABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   }
-];
+]; 

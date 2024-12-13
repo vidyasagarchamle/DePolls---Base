@@ -168,4 +168,25 @@ contract DePolls is EIP712 {
     function getDomainSeparator() external view returns (bytes32) {
         return _domainSeparatorV4();
     }
+
+    function getPollData(uint256 _pollId) external view returns (
+        string memory question,
+        address creator,
+        uint256 deadline,
+        bool isMultipleChoice,
+        bool isActive,
+        bool hasWhitelist,
+        uint256 optionCount
+    ) {
+        Poll storage poll = polls[_pollId];
+        return (
+            poll.question,
+            poll.creator,
+            poll.deadline,
+            poll.isMultipleChoice,
+            poll.isActive,
+            poll.hasWhitelist,
+            poll.optionCount
+        );
+    }
 } 

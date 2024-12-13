@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -27,9 +27,10 @@ import {
   TagLeftIcon,
   Alert,
   AlertIcon,
+  Link,
 } from '@chakra-ui/react';
-import { AddIcon, CloseIcon, TimeIcon, CheckIcon, LockIcon } from '@chakra-ui/icons';
-import { useContractWrite, usePrepareContractWrite, useWaitForTransaction } from 'wagmi';
+import { AddIcon, CloseIcon, TimeIcon, CheckIcon, LockIcon, ExternalLinkIcon } from '@chakra-ui/icons';
+import { useContractWrite, usePrepareContractWrite, useWaitForTransaction, useNetwork, useSwitchNetwork } from 'wagmi';
 import { ethers } from 'ethers';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 
@@ -40,8 +41,18 @@ const CreatePoll = ({ onPollCreated }) => {
   const [isMultipleChoice, setIsMultipleChoice] = useState(false);
   const [hasWhitelist, setHasWhitelist] = useState(false);
   const [whitelistedAddresses, setWhitelistedAddresses] = useState(['']);
+  const [touched, setTouched] = useState({
+    question: false,
+    options: false,
+    deadline: false,
+    whitelist: false
+  });
 
   const toast = useToast();
+  const { chain } = useNetwork();
+  const { switchNetwork } = useSwitchNetwork();
+  const isWrongNetwork = chain?.id !== 84532;
+
   const bgColor = useColorModeValue('white', 'gray.800');
   const textColor = useColorModeValue('gray.800', 'white');
   const mutedColor = useColorModeValue('gray.600', 'gray.400');
@@ -64,6 +75,23 @@ const CreatePoll = ({ onPollCreated }) => {
     return uniqueOptions;
   };
 
+  // Check if form is valid
+  const isFormValid = () => {
+    const validOptions = getValidOptions();
+    if (!question.trim() || validOptions.length < 2) return false;
+
+    const deadlineTimestamp = getDeadlineTimestamp();
+    const currentTime = BigInt(Math.floor(Date.now() / 1000));
+    if (deadlineTimestamp <= currentTime) return false;
+
+    if (hasWhitelist) {
+      const validAddresses = whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr));
+      if (validAddresses.length === 0) return false;
+    }
+
+    return true;
+  };
+
   // Prepare contract arguments
   const getContractArgs = () => {
     const validOptions = getValidOptions();
@@ -71,7 +99,7 @@ const CreatePoll = ({ onPollCreated }) => {
       ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr))
       : [];
 
-    const args = [
+    return [
       question.trim(),
       validOptions,
       getDeadlineTimestamp(),
@@ -79,86 +107,6 @@ const CreatePoll = ({ onPollCreated }) => {
       hasWhitelist,
       validAddresses,
     ];
-
-    console.log('Contract args:', {
-      question: args[0],
-      options: args[1],
-      deadline: args[2].toString(),
-      isMultipleChoice: args[3],
-      hasWhitelist: args[4],
-      whitelistedAddresses: args[5]
-    });
-
-    return args;
-  };
-
-  // Check if form is valid
-  const isFormValid = () => {
-    const validOptions = getValidOptions();
-    const validAddresses = hasWhitelist 
-      ? whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr))
-      : [];
-    const currentTime = BigInt(Math.floor(Date.now() / 1000));
-    const deadlineTime = getDeadlineTimestamp();
-
-    // Check for duplicate options
-    const hasDuplicateOptions = options.map(opt => opt.trim()).filter(opt => opt !== '').length !== validOptions.length;
-
-    // Log individual validations
-    console.log('Validation checks:', {
-      question: question.trim(),
-      questionLength: question.trim().length,
-      rawOptions: options.map(opt => opt.trim()),
-      validOptions,
-      validOptionsCount: validOptions.length,
-      hasDuplicateOptions,
-      deadline: deadline,
-      deadlineTime: deadlineTime.toString(),
-      currentTime: currentTime.toString(),
-      hasWhitelist,
-      validAddresses,
-      validAddressesCount: validAddresses.length
-    });
-
-    const isValid = 
-      question.trim().length > 0 && 
-      validOptions.length >= 2 &&
-      !hasDuplicateOptions &&
-      deadlineTime > currentTime &&
-      (!hasWhitelist || validAddresses.length > 0);
-
-    return isValid;
-  };
-
-  const validateForm = () => {
-    const errors = [];
-    const validOptions = getValidOptions();
-    const currentTime = BigInt(Math.floor(Date.now() / 1000));
-    const deadlineTime = getDeadlineTimestamp();
-
-    if (!question.trim()) {
-      errors.push("Question is required");
-    }
-
-    if (validOptions.length < 2) {
-      errors.push("At least 2 different options are required");
-    }
-
-    if (options.map(opt => opt.trim()).filter(opt => opt !== '').length !== validOptions.length) {
-      errors.push("Options must be unique");
-    }
-
-    if (!deadline) {
-      errors.push("Deadline is required");
-    } else if (deadlineTime <= currentTime) {
-      errors.push("Deadline must be in the future");
-    }
-
-    if (hasWhitelist && whitelistedAddresses.filter(addr => ethers.utils.isAddress(addr)).length === 0) {
-      errors.push("At least one valid address is required for whitelist");
-    }
-
-    return errors;
   };
 
   // Contract interaction setup
@@ -167,14 +115,17 @@ const CreatePoll = ({ onPollCreated }) => {
     abi: DePollsABI,
     functionName: 'createPoll',
     args: getContractArgs(),
-    enabled: isFormValid(),
-    chainId: 84532, // Base Sepolia
-    gas: BigInt(500000), // Set gas limit
+    enabled: isFormValid() && !isWrongNetwork,
+    chainId: 84532,
+    onError: (error) => {
+      console.error('Error preparing contract write:', error);
+    }
   });
 
   const { write: createPoll, data: createData, isLoading: isCreating, error: writeError } = useContractWrite({
     ...createConfig,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Create poll transaction sent:', data);
       toast({
         title: 'Creating Poll',
         description: 'Your poll is being created...',
@@ -184,23 +135,17 @@ const CreatePoll = ({ onPollCreated }) => {
       });
     },
     onError: (error) => {
-      console.error('Contract write error:', error);
+      console.error('Contract write error:', {
+        error,
+        message: error.message,
+        code: error.code
+      });
       let errorMessage = 'Failed to create poll';
 
-      // Check for specific error messages
-      const errorString = error.message.toLowerCase();
-      if (errorString.includes("user rejected")) {
+      if (error.message.toLowerCase().includes("user rejected")) {
         errorMessage = "Transaction was rejected";
-      } else if (errorString.includes("insufficient funds")) {
+      } else if (error.message.toLowerCase().includes("insufficient funds")) {
         errorMessage = "Insufficient funds for gas";
-      } else if (errorString.includes("nonce too low")) {
-        errorMessage = "Please try again";
-      } else if (errorString.includes("deadline must be in the future")) {
-        errorMessage = "Deadline must be at least 5 minutes in the future";
-      } else if (errorString.includes("question cannot be empty")) {
-        errorMessage = "Question cannot be empty";
-      } else if (errorString.includes("at least 2 options required")) {
-        errorMessage = "At least 2 different options are required";
       }
 
       toast({
@@ -214,7 +159,8 @@ const CreatePoll = ({ onPollCreated }) => {
 
   const { isLoading: isWaitingCreate } = useWaitForTransaction({
     hash: createData?.hash,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Create poll transaction confirmed:', data);
       toast.close('creating-poll');
       toast({
         title: 'Success!',
@@ -229,10 +175,16 @@ const CreatePoll = ({ onPollCreated }) => {
       setIsMultipleChoice(false);
       setHasWhitelist(false);
       setWhitelistedAddresses(['']);
+      setTouched({
+        question: false,
+        options: false,
+        deadline: false,
+        whitelist: false
+      });
+      // Notify parent
       if (onPollCreated) {
+        console.log('Notifying parent of poll creation');
         onPollCreated();
-        // Call onPollCreated again after a delay to ensure the new poll is fetched
-        setTimeout(() => onPollCreated(), 2000);
       }
     },
     onError: (error) => {
@@ -243,54 +195,31 @@ const CreatePoll = ({ onPollCreated }) => {
         status: 'error',
         duration: 5000,
       });
-    },
+    }
   });
-
-  const handleAddOption = () => {
-    if (options.length >= 5) return;
-    setOptions(prev => [...prev, '']);
-  };
-
-  const handleRemoveOption = (index) => {
-    if (options.length <= 2) return;
-    setOptions(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleOptionChange = (index, value) => {
-    setOptions(prev => prev.map((opt, i) => i === index ? value : opt));
-  };
-
-  const handleAddWhitelistAddress = () => {
-    setWhitelistedAddresses(prev => [...prev, '']);
-  };
-
-  const handleRemoveWhitelistAddress = (index) => {
-    if (whitelistedAddresses.length <= 1) return;
-    setWhitelistedAddresses(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleWhitelistAddressChange = (index, value) => {
-    setWhitelistedAddresses(prev => prev.map((addr, i) => i === index ? value : addr));
-  };
 
   const handleCreatePoll = async () => {
     if (!isFormValid()) {
-      const errors = validateForm();
-      toast({
-        title: 'Validation Error',
-        description: errors.join('\n'),
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
+      console.log('Form validation failed:', {
+        hasQuestion: !!question.trim(),
+        validOptionsCount: getValidOptions().length,
+        hasValidDeadline: getDeadlineTimestamp() > BigInt(Math.floor(Date.now() / 1000)),
+        hasValidWhitelist: !hasWhitelist || whitelistedAddresses.some(addr => ethers.utils.isAddress(addr))
+      });
+      setTouched({
+        question: true,
+        options: true,
+        deadline: true,
+        whitelist: hasWhitelist
       });
       return;
     }
 
     try {
-      console.log('Creating poll with args:', getContractArgs());
       if (!createPoll) {
-        throw new Error('Create poll function not available. Please make sure your wallet is connected and on Base Sepolia network.');
+        throw new Error('Create poll function not available');
       }
+      console.log('Creating poll with args:', getContractArgs());
       await createPoll();
     } catch (error) {
       console.error('Create poll error:', error);
@@ -303,19 +232,28 @@ const CreatePoll = ({ onPollCreated }) => {
     }
   };
 
-  const isLoading = isCreating || isWaitingCreate;
+  const handleAddOption = () => {
+    if (options.length >= 5) return;
+    setOptions(prev => [...prev, '']);
+    setTouched(prev => ({ ...prev, options: true }));
+  };
 
-  // Log current form state for debugging
-  console.log('Form state:', {
-    hasQuestion: Boolean(question.trim()),
-    hasValidOptions: options.filter(opt => opt.trim() !== '').length >= 2,
-    hasValidDeadline: getDeadlineTimestamp() > BigInt(Math.floor(Date.now() / 1000)),
-    canCreatePoll: Boolean(createPoll),
-    contractArgs: getContractArgs(),
-    prepareError,
-    writeError,
-    isFormValid: isFormValid()
-  });
+  const handleRemoveOption = (index) => {
+    if (options.length <= 2) return;
+    setOptions(prev => prev.filter((_, i) => i !== index));
+    setTouched(prev => ({ ...prev, options: true }));
+  };
+
+  const handleOptionChange = (index, value) => {
+    setOptions(prev => prev.map((opt, i) => i === index ? value : opt));
+    setTouched(prev => ({ ...prev, options: true }));
+  };
+
+  const handleBlur = (field) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
+  const isLoading = isCreating || isWaitingCreate;
 
   return (
     <Card
@@ -331,12 +269,34 @@ const CreatePoll = ({ onPollCreated }) => {
       </CardHeader>
 
       <CardBody>
+        {isWrongNetwork && (
+          <Alert status="warning" mb={6} borderRadius="lg">
+            <AlertIcon />
+            <Box>
+              <Text>Please switch to Base Sepolia network to create polls.</Text>
+              <Button
+                size="sm"
+                colorScheme="blue"
+                mt={2}
+                onClick={() => switchNetwork?.(84532)}
+                rightIcon={<ExternalLinkIcon />}
+              >
+                Switch Network
+              </Button>
+            </Box>
+          </Alert>
+        )}
+
         <VStack spacing={6} align="stretch">
-          <FormControl isRequired>
+          <FormControl 
+            isRequired 
+            isInvalid={touched.question && !question.trim()}
+          >
             <FormLabel fontWeight="medium" color={textColor}>Question</FormLabel>
             <Textarea
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
+              onBlur={() => handleBlur('question')}
               placeholder="What would you like to ask?"
               resize="vertical"
               disabled={isLoading}
@@ -347,39 +307,43 @@ const CreatePoll = ({ onPollCreated }) => {
               _focus={{ borderColor: accentColor, boxShadow: 'none' }}
               minH="100px"
             />
-            <FormHelperText color={mutedColor}>
-              {200 - question.length} characters remaining
-            </FormHelperText>
+            {touched.question && !question.trim() && (
+              <FormHelperText color="red.500">
+                Question is required
+              </FormHelperText>
+            )}
           </FormControl>
 
-          <FormControl isRequired>
+          <FormControl 
+            isRequired 
+            isInvalid={touched.options && getValidOptions().length < 2}
+          >
             <FormLabel fontWeight="medium" color={textColor}>Options</FormLabel>
             <VStack spacing={3} align="stretch">
               {options.map((option, index) => (
-                <Flex key={index} gap={2}>
+                <HStack key={index}>
                   <Input
                     value={option}
                     onChange={(e) => handleOptionChange(index, e.target.value)}
+                    onBlur={() => handleBlur('options')}
                     placeholder={`Option ${index + 1}`}
                     disabled={isLoading}
-                    maxLength={100}
                     borderRadius="lg"
                     bg={inputBg}
                     color={textColor}
                     _focus={{ borderColor: accentColor, boxShadow: 'none' }}
                   />
-                  {index >= 2 && (
+                  {options.length > 2 && (
                     <IconButton
                       icon={<CloseIcon />}
                       onClick={() => handleRemoveOption(index)}
+                      disabled={isLoading}
                       variant="ghost"
                       colorScheme="red"
-                      disabled={isLoading}
-                      aria-label="Remove option"
-                      borderRadius="lg"
+                      size="sm"
                     />
                   )}
-                </Flex>
+                </HStack>
               ))}
               {options.length < 5 && (
                 <Button
@@ -389,23 +353,28 @@ const CreatePoll = ({ onPollCreated }) => {
                   size="sm"
                   disabled={isLoading}
                   color={accentColor}
-                  _hover={{ bg: useColorModeValue('brand.50', 'brand.900') }}
                 >
                   Add Option
                 </Button>
               )}
             </VStack>
-            <FormHelperText color={mutedColor}>
-              Add up to 5 options
-            </FormHelperText>
+            {touched.options && getValidOptions().length < 2 && (
+              <FormHelperText color="red.500">
+                At least 2 different options are required
+              </FormHelperText>
+            )}
           </FormControl>
 
-          <FormControl isRequired>
+          <FormControl 
+            isRequired 
+            isInvalid={touched.deadline && (!deadline || getDeadlineTimestamp() <= BigInt(Math.floor(Date.now() / 1000)))}
+          >
             <FormLabel fontWeight="medium" color={textColor}>Deadline</FormLabel>
             <Input
               type="datetime-local"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
+              onBlur={() => handleBlur('deadline')}
               min={new Date(Date.now() + 300000).toISOString().slice(0, 16)}
               disabled={isLoading}
               borderRadius="lg"
@@ -413,123 +382,47 @@ const CreatePoll = ({ onPollCreated }) => {
               color={textColor}
               _focus={{ borderColor: accentColor, boxShadow: 'none' }}
             />
+            {touched.deadline && !deadline && (
+              <FormHelperText color="red.500">
+                Deadline is required
+              </FormHelperText>
+            )}
+            {touched.deadline && deadline && getDeadlineTimestamp() <= BigInt(Math.floor(Date.now() / 1000)) && (
+              <FormHelperText color="red.500">
+                Deadline must be at least 5 minutes in the future
+              </FormHelperText>
+            )}
+          </FormControl>
+
+          <FormControl>
+            <FormLabel fontWeight="medium" color={textColor}>Multiple Choice</FormLabel>
+            <Switch
+              isChecked={isMultipleChoice}
+              onChange={(e) => setIsMultipleChoice(e.target.checked)}
+              disabled={isLoading}
+              colorScheme="brand"
+            />
             <FormHelperText color={mutedColor}>
-              <TimeIcon mr={1} />
-              Poll will automatically close at this time
+              Allow voters to select multiple options
             </FormHelperText>
           </FormControl>
 
-          <Divider />
-
-          <VStack spacing={4} align="stretch">
-            <Heading size="sm" color={textColor} mb={2}>Poll Settings</Heading>
-            
-            <FormControl>
-              <HStack justify="space-between" spacing={4}>
-                <Box>
-                  <FormLabel mb="0" color={textColor}>Multiple Choice</FormLabel>
-                  <FormHelperText color={mutedColor}>Allow selecting multiple options</FormHelperText>
-                </Box>
-                <Switch
-                  isChecked={isMultipleChoice}
-                  onChange={(e) => setIsMultipleChoice(e.target.checked)}
-                  disabled={isLoading}
-                  colorScheme="brand"
-                  size="lg"
-                />
-              </HStack>
-            </FormControl>
-
-            <FormControl>
-              <HStack justify="space-between" spacing={4}>
-                <Box>
-                  <FormLabel mb="0" color={textColor}>Enable Whitelist</FormLabel>
-                  <FormHelperText color={mutedColor}>Restrict voting to specific addresses</FormHelperText>
-                </Box>
-                <Switch
-                  isChecked={hasWhitelist}
-                  onChange={(e) => setHasWhitelist(e.target.checked)}
-                  disabled={isLoading}
-                  colorScheme="brand"
-                  size="lg"
-                />
-              </HStack>
-            </FormControl>
-
-            {hasWhitelist && (
-              <FormControl>
-                <FormLabel color={textColor} fontSize="sm">Whitelisted Addresses</FormLabel>
-                <VStack spacing={3} align="stretch">
-                  {whitelistedAddresses.map((address, index) => (
-                    <Flex key={index} gap={2}>
-                      <Input
-                        value={address}
-                        onChange={(e) => handleWhitelistAddressChange(index, e.target.value)}
-                        placeholder="0x..."
-                        disabled={isLoading}
-                        isInvalid={address && !ethers.utils.isAddress(address)}
-                        borderRadius="lg"
-                        bg={inputBg}
-                        color={textColor}
-                        _focus={{ borderColor: accentColor, boxShadow: 'none' }}
-                      />
-                      {index > 0 && (
-                        <IconButton
-                          icon={<CloseIcon />}
-                          onClick={() => handleRemoveWhitelistAddress(index)}
-                          variant="ghost"
-                          colorScheme="red"
-                          disabled={isLoading}
-                          aria-label="Remove address"
-                          borderRadius="lg"
-                        />
-                      )}
-                    </Flex>
-                  ))}
-                  <Button
-                    leftIcon={<AddIcon />}
-                    onClick={handleAddWhitelistAddress}
-                    variant="ghost"
-                    size="sm"
-                    disabled={isLoading}
-                    color={accentColor}
-                    _hover={{ bg: useColorModeValue('brand.50', 'brand.900') }}
-                  >
-                    Add Address
-                  </Button>
-                </VStack>
-                <FormHelperText color={mutedColor}>
-                  Only these addresses will be able to vote on this poll
-                </FormHelperText>
-              </FormControl>
-            )}
-          </VStack>
-
           <Button
             colorScheme="brand"
-            onClick={handleCreatePoll}
+            size="lg"
             isLoading={isLoading}
             loadingText="Creating Poll..."
-            isDisabled={!isFormValid() || !createPoll || isLoading}
-            size="lg"
-            borderRadius="xl"
-            fontWeight="semibold"
-            _hover={{
-              transform: !isLoading ? 'translateY(-1px)' : undefined,
-              boxShadow: !isLoading ? 'lg' : undefined,
-            }}
-            _active={{
-              transform: 'translateY(0)',
-              boxShadow: 'md',
-            }}
+            onClick={handleCreatePoll}
+            isDisabled={!isFormValid() || isWrongNetwork}
+            w="full"
           >
             Create Poll
           </Button>
 
-          {(prepareError || writeError) && (
+          {prepareError && (
             <Alert status="error" borderRadius="lg">
               <AlertIcon />
-              <Text>{prepareError?.message || writeError?.message || 'Error preparing transaction'}</Text>
+              <Text>Error preparing transaction: {prepareError.message}</Text>
             </Alert>
           )}
         </VStack>
