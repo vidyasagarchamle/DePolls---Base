@@ -187,17 +187,25 @@ const PollList = () => {
 
   useEffect(() => {
     if (polls.length > 0 && address) {
-      const userCreated = polls.filter(poll => 
-        poll.creator && address && 
-        poll.creator.toLowerCase() === address.toLowerCase()
-      );
+      console.log('Filtering polls for address:', address);
+      console.log('Available polls:', polls);
       
-      const active = polls.filter(poll => 
-        poll.isActive && 
-        poll.creator && address &&
-        poll.creator.toLowerCase() !== address.toLowerCase()
-      );
+      const userCreated = polls.filter(poll => {
+        const isCreator = poll.creator?.toLowerCase() === address?.toLowerCase();
+        console.log('Poll creator check:', {
+          pollCreator: poll.creator,
+          userAddress: address,
+          isCreator
+        });
+        return isCreator;
+      });
       
+      const active = polls.filter(poll => {
+        const isActive = poll.isActive && poll.creator?.toLowerCase() !== address?.toLowerCase();
+        return isActive;
+      });
+      
+      console.log('Filtered polls:', { userCreated, active });
       setUserPolls(userCreated);
       setActivePolls(active);
     } else {
@@ -207,11 +215,13 @@ const PollList = () => {
   }, [polls, address]);
 
   const handleRefresh = useCallback(async () => {
+    console.log('Refreshing polls...');
     setError(null);
     setIsLoading(true);
     try {
       await refetchPollCount();
       await fetchPolls();
+      console.log('Polls refreshed successfully');
     } catch (error) {
       console.error('Error refreshing polls:', error);
       setError('Failed to refresh polls. Please try again.');
@@ -219,6 +229,11 @@ const PollList = () => {
       setIsLoading(false);
     }
   }, [refetchPollCount, fetchPolls]);
+
+  const onPollCreated = useCallback(() => {
+    console.log('Poll created, refreshing...');
+    handleRefresh();
+  }, [handleRefresh]);
 
   const EmptyState = ({ message, actionLabel, onAction }) => (
     <Center py={12} px={6}>
@@ -306,7 +321,11 @@ const PollList = () => {
   return (
     <ErrorBoundary onRetry={handleRefresh}>
       <Container maxW="container.lg" py={8}>
-        <CreatePoll onPollCreated={handleRefresh} />
+        <VStack spacing={8} align="stretch">
+          <ErrorBoundary>
+            <CreatePoll onPollCreated={onPollCreated} />
+          </ErrorBoundary>
+        </VStack>
         
         <Card
           mt={8}

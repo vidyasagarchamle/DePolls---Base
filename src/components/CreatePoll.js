@@ -102,7 +102,7 @@ const CreatePoll = ({ onPollCreated }) => {
     );
   };
 
-  const { write: createPoll, data: createPollData } = useContractWrite({
+  const { write: createPoll, data: createPollData, isLoading: isWriteLoading } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'createPoll',
@@ -124,6 +124,7 @@ const CreatePoll = ({ onPollCreated }) => {
       }
     },
     onError(error) {
+      console.error('Transaction error:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to create poll',
@@ -138,19 +139,27 @@ const CreatePoll = ({ onPollCreated }) => {
     if (!isFormValid()) return;
 
     try {
+      setIsSubmitting(true);
       const validOptions = getValidOptions();
       const validWhitelist = hasWhitelist ? getValidWhitelist() : [];
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60); // 7 days from now
 
-      await createPoll({
+      const result = await createPoll({
         args: [
           question,
           validOptions,
           isMultipleChoice,
           hasWhitelist,
           validWhitelist,
-          BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60), // 7 days from now
+          deadline,
         ],
       });
+
+      if (!result) {
+        throw new Error('Failed to create poll');
+      }
+
+      console.log('Create poll transaction:', result);
     } catch (error) {
       console.error('Error creating poll:', error);
       toast({
@@ -159,6 +168,7 @@ const CreatePoll = ({ onPollCreated }) => {
         status: 'error',
         duration: 5000,
       });
+      setIsSubmitting(false);
     }
   };
 
@@ -397,9 +407,9 @@ const CreatePoll = ({ onPollCreated }) => {
                     type="submit"
                     colorScheme="brand"
                     size="lg"
-                    isLoading={isSubmitting}
+                    isLoading={isSubmitting || isWriteLoading || isWaitingForTx}
                     loadingText="Creating Poll..."
-                    disabled={!isFormValid()}
+                    disabled={!isFormValid() || isSubmitting || isWriteLoading || isWaitingForTx}
                   >
                     Create Poll
                   </Button>
