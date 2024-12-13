@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -21,7 +21,7 @@ import {
   Heading,
   Divider,
 } from '@chakra-ui/react';
-import { AddIcon, ChevronDownIcon, ChevronUpIcon, CloseIcon } from '@chakra-ui/icons';
+import { AddIcon, ChevronDownIcon, ChevronUpIcon, CloseIcon, EditIcon } from '@chakra-ui/icons';
 import { useContractWrite, useWaitForTransaction } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 
@@ -34,8 +34,10 @@ const CreatePoll = ({ onPollCreated }) => {
   const [whitelistAddresses, setWhitelistAddresses] = useState(['']);
   const [touched, setTouched] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [transactionHash, setTransactionHash] = useState('');
 
   const toast = useToast();
+  const toastIdRef = React.useRef();
 
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
@@ -102,82 +104,32 @@ const CreatePoll = ({ onPollCreated }) => {
     );
   };
 
-  const handleCreatePoll = async (e) => {
-    e.preventDefault();
-    if (!isFormValid()) return;
-
-    try {
-      setIsSubmitting(true);
-      const validOptions = getValidOptions().map(opt => opt.trim());
-      const validWhitelist = hasWhitelist ? getValidWhitelist() : [];
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60); // 7 days from now
-
-      console.log('Creating poll with args:', {
-        question: question.trim(),
-        options: validOptions,
-        deadline: deadline.toString(),
-        isMultipleChoice,
-        hasWhitelist,
-        whitelist: validWhitelist
+  const showTransactionToast = useCallback((status, title, description) => {
+    if (toastIdRef.current) {
+      toast.update(toastIdRef.current, { status, title, description });
+    } else {
+      toastIdRef.current = toast({
+        title,
+        description,
+        status,
+        duration: null,
+        isClosable: true,
+        position: 'bottom-right'
       });
-
-      if (!createPoll) {
-        throw new Error('Contract write function not available');
-      }
-
-      // Order of parameters according to contract:
-      // _question, _options, _deadline, _isMultipleChoice, _hasWhitelist, _whitelistedAddresses
-      const pollArgs = [
-        question.trim(),
-        validOptions,
-        deadline,
-        isMultipleChoice,
-        hasWhitelist,
-        hasWhitelist ? validWhitelist : []
-      ];
-
-      console.log('Poll arguments:', pollArgs);
-
-      await createPoll({
-        args: pollArgs,
-        onError(error) {
-          console.error('Poll creation error:', error);
-          toast({
-            title: 'Error',
-            description: error.message || 'Failed to create poll',
-            status: 'error',
-            duration: 5000,
-          });
-          setIsSubmitting(false);
-        },
-        onSuccess(data) {
-          console.log('Poll creation initiated:', data);
-        }
-      });
-    } catch (error) {
-      console.error('Error in handleCreatePoll:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create poll',
-        status: 'error',
-        duration: 5000,
-      });
-      setIsSubmitting(false);
     }
-  };
+  }, [toast]);
 
-  const { write: createPoll, data: createPollData, isLoading: isWriteLoading, error: writeError } = useContractWrite({
+  const { write: createPoll, data: createPollData, isLoading: isWriteLoading } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'createPoll',
     onError(error) {
       console.error('Contract write error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create poll',
-        status: 'error',
-        duration: 5000,
-      });
+      showTransactionToast(
+        'error',
+        'Transaction Failed',
+        error.message || 'Failed to create poll'
+      );
       setIsSubmitting(false);
     }
   });
@@ -185,12 +137,11 @@ const CreatePoll = ({ onPollCreated }) => {
   const { isLoading: isWaitingForTx } = useWaitForTransaction({
     hash: createPollData?.hash,
     onSuccess() {
-      toast({
-        title: 'Success',
-        description: 'Poll created successfully!',
-        status: 'success',
-        duration: 5000,
-      });
+      showTransactionToast(
+        'success',
+        'Poll Created!',
+        'Your poll has been created successfully'
+      );
       resetForm();
       setIsExpanded(false);
       setIsSubmitting(false);
@@ -200,15 +151,57 @@ const CreatePoll = ({ onPollCreated }) => {
     },
     onError(error) {
       console.error('Transaction error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Transaction failed',
-        status: 'error',
-        duration: 5000,
-      });
+      showTransactionToast(
+        'error',
+        'Transaction Failed',
+        error.message || 'Failed to create poll'
+      );
       setIsSubmitting(false);
     },
   });
+
+  const handleCreatePoll = async (e) => {
+    e.preventDefault();
+    if (!isFormValid()) return;
+
+    try {
+      setIsSubmitting(true);
+      const validOptions = getValidOptions().map(opt => opt.trim());
+      const validWhitelist = hasWhitelist ? getValidWhitelist() : [];
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+
+      showTransactionToast(
+        'info',
+        'Creating Poll',
+        'Please confirm the transaction in your wallet...'
+      );
+
+      await createPoll({
+        args: [
+          question.trim(),
+          validOptions,
+          deadline,
+          isMultipleChoice,
+          hasWhitelist,
+          validWhitelist
+        ],
+      });
+
+      showTransactionToast(
+        'loading',
+        'Transaction Pending',
+        'Your poll is being created...'
+      );
+    } catch (error) {
+      console.error('Error in handleCreatePoll:', error);
+      showTransactionToast(
+        'error',
+        'Transaction Failed',
+        error.message || 'Failed to create poll'
+      );
+      setIsSubmitting(false);
+    }
+  };
 
   const resetForm = () => {
     setQuestion('');
@@ -250,6 +243,7 @@ const CreatePoll = ({ onPollCreated }) => {
           } : {}}
           transition="all 0.2s"
           borderRadius="xl"
+          disabled={isSubmitting || isWriteLoading || isWaitingForTx}
         >
           <HStack spacing={3}>
             <Box
@@ -259,7 +253,7 @@ const CreatePoll = ({ onPollCreated }) => {
               borderRadius="lg"
               transition="all 0.2s"
             >
-              <AddIcon boxSize="4" />
+              <EditIcon boxSize="4" />
             </Box>
             <VStack align="start" spacing={0}>
               <Heading size="sm" color={textColor}>
@@ -272,11 +266,12 @@ const CreatePoll = ({ onPollCreated }) => {
               )}
             </VStack>
           </HStack>
-          {isExpanded ? (
-            <ChevronUpIcon boxSize={6} color={mutedColor} />
-          ) : (
+          <Box
+            transform={isExpanded ? 'rotate(-180deg)' : 'rotate(0)'}
+            transition="transform 0.2s"
+          >
             <ChevronDownIcon boxSize={6} color={mutedColor} />
-          )}
+          </Box>
         </Box>
 
         <Collapse in={isExpanded} animateOpacity>

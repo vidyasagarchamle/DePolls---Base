@@ -47,7 +47,23 @@ const Poll = ({ poll, onVote, onClose }) => {
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
+  const toastIdRef = React.useRef();
   const { address } = useAccount();
+
+  const showTransactionToast = useCallback((status, title, description) => {
+    if (toastIdRef.current) {
+      toast.update(toastIdRef.current, { status, title, description });
+    } else {
+      toastIdRef.current = toast({
+        title,
+        description,
+        status,
+        duration: null,
+        isClosable: true,
+        position: 'bottom-right'
+      });
+    }
+  }, [toast]);
 
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
@@ -57,36 +73,74 @@ const Poll = ({ poll, onVote, onClose }) => {
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'vote',
+    onError(error) {
+      console.error('Vote error:', error);
+      showTransactionToast(
+        'error',
+        'Vote Failed',
+        error.message || 'Failed to submit vote'
+      );
+      setIsSubmitting(false);
+    }
+  });
+
+  const { isLoading: isVoting } = useWaitForTransaction({
+    hash: voteData?.hash,
+    onSuccess() {
+      showTransactionToast(
+        'success',
+        'Vote Submitted!',
+        'Your vote has been recorded successfully'
+      );
+      setIsSubmitting(false);
+      if (onVote) onVote();
+      setSelectedOptions([]);
+    },
+    onError(error) {
+      console.error('Vote transaction error:', error);
+      showTransactionToast(
+        'error',
+        'Vote Failed',
+        error.message || 'Failed to submit vote'
+      );
+      setIsSubmitting(false);
+    },
   });
 
   const { write: closePoll, data: closeData, isLoading: isClosing } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'closePoll',
+    onError(error) {
+      console.error('Close poll error:', error);
+      showTransactionToast(
+        'error',
+        'Failed to Close Poll',
+        error.message || 'Failed to close poll'
+      );
+      setIsSubmitting(false);
+    }
   });
 
-  const { isLoading: isVoting } = useWaitForTransaction({
-    hash: voteData?.hash,
+  const { isLoading: isClosingTx } = useWaitForTransaction({
+    hash: closeData?.hash,
     onSuccess() {
+      showTransactionToast(
+        'success',
+        'Poll Closed',
+        'The poll has been closed successfully'
+      );
       setIsSubmitting(false);
-      toast({
-        title: 'Success',
-        description: 'Vote submitted successfully',
-        status: 'success',
-        duration: 3000,
-      });
-      if (onVote) onVote();
-      setSelectedOptions([]);
+      if (onClose) onClose();
     },
     onError(error) {
+      console.error('Close poll transaction error:', error);
+      showTransactionToast(
+        'error',
+        'Failed to Close Poll',
+        error.message || 'Failed to close poll'
+      );
       setIsSubmitting(false);
-      console.error('Vote transaction error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to submit vote',
-        status: 'error',
-        duration: 5000,
-      });
     },
   });
 
@@ -103,40 +157,60 @@ const Poll = ({ poll, onVote, onClose }) => {
 
     try {
       setIsSubmitting(true);
+      showTransactionToast(
+        'info',
+        'Submitting Vote',
+        'Please confirm the transaction in your wallet...'
+      );
+
       await vote({
         args: [BigInt(poll.id), selectedOptions.map(i => BigInt(i))],
       });
+
+      showTransactionToast(
+        'loading',
+        'Vote in Progress',
+        'Your vote is being recorded...'
+      );
     } catch (error) {
       console.error('Voting error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to submit vote',
-        status: 'error',
-        duration: 5000,
-      });
+      showTransactionToast(
+        'error',
+        'Vote Failed',
+        error.message || 'Failed to submit vote'
+      );
       setIsSubmitting(false);
     }
-  }, [poll.id, selectedOptions, vote, toast]);
+  }, [poll.id, selectedOptions, vote, showTransactionToast]);
 
   const handleClose = useCallback(async () => {
-    if (!closePoll) return;
-
     try {
       setIsSubmitting(true);
+      showTransactionToast(
+        'info',
+        'Closing Poll',
+        'Please confirm the transaction in your wallet...'
+      );
+
       await closePoll({
         args: [BigInt(poll.id)],
       });
+
+      showTransactionToast(
+        'loading',
+        'Closing in Progress',
+        'The poll is being closed...'
+      );
     } catch (error) {
       console.error('Error closing poll:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to close poll',
-        status: 'error',
-        duration: 5000,
-      });
+      showTransactionToast(
+        'error',
+        'Failed to Close Poll',
+        error.message || 'Failed to close poll'
+      );
       setIsSubmitting(false);
     }
-  }, [poll.id, closePoll, toast]);
+  }, [poll.id, closePoll, showTransactionToast]);
 
   const isExpired = poll.deadline * 1000 < Date.now();
   const canVote = !isExpired && !poll.hasVoted && poll.isActive && (!poll.hasWhitelist || poll.isWhitelisted);
@@ -278,7 +352,7 @@ const Poll = ({ poll, onVote, onClose }) => {
               w="full"
               size="lg"
               mt={4}
-              disabled={isSubmitting || isVoting}
+              disabled={isSubmitting || isVoting || !selectedOptions.length}
             >
               Vote
             </Button>
@@ -289,10 +363,11 @@ const Poll = ({ poll, onVote, onClose }) => {
               colorScheme="red"
               variant="outline"
               onClick={handleClose}
-              isLoading={isClosing}
+              isLoading={isSubmitting || isClosing || isClosingTx}
               loadingText="Closing poll..."
               w="full"
               size="lg"
+              disabled={isSubmitting || isClosing || isClosingTx}
             >
               Close Poll
             </Button>
