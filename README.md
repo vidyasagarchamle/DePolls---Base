@@ -1,10 +1,9 @@
 # DePolls - Decentralized Polling Platform
 
-A modern, decentralized polling platform built on Base (Sepolia testnet) that allows users to create and participate in polls without gas fees.
+A modern, decentralized polling platform built on Base (Sepolia testnet) that allows users to create and participate in polls with a seamless user experience.
 
 ## Features
 
-- **Gasless Voting**: Vote on polls without paying gas fees using EIP-712 signatures
 - **User-Friendly Interface**: Modern UI with smooth transitions and intuitive design
 - **Poll Management**:
   - Create polls with multiple options
@@ -21,7 +20,7 @@ A modern, decentralized polling platform built on Base (Sepolia testnet) that al
 
 ## Deployed Contract (Base Sepolia)
 
-- DePolls: `0x41395582EDE920Dcef10fea984c9A0459885E8eB`
+- DePolls: `0xF04a545cdDd7Ce1447047Ccb32EAfE6F22A5d026`
 
 ## Architecture
 
@@ -29,7 +28,6 @@ A modern, decentralized polling platform built on Base (Sepolia testnet) that al
 - Built with Solidity and deployed on Base Sepolia
 - Uses OpenZeppelin for secure implementation
 - Features:
-  - Gasless voting with EIP-712 signatures
   - Whitelisting support
   - Poll duration management
   - Vote tracking and validation
