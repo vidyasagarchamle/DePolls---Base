@@ -102,10 +102,20 @@ const CreatePoll = ({ onPollCreated }) => {
     );
   };
 
-  const { write: createPoll, data: createPollData, isLoading: isWriteLoading } = useContractWrite({
+  const { write: createPoll, data: createPollData, isLoading: isWriteLoading, error: writeError } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'createPoll',
+    onError(error) {
+      console.error('Contract write error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create poll',
+        status: 'error',
+        duration: 5000,
+      });
+      setIsSubmitting(false);
+    }
   });
 
   const { isLoading: isWaitingForTx } = useWaitForTransaction({
@@ -119,6 +129,7 @@ const CreatePoll = ({ onPollCreated }) => {
       });
       resetForm();
       setIsExpanded(false);
+      setIsSubmitting(false);
       if (onPollCreated) {
         onPollCreated();
       }
@@ -127,10 +138,11 @@ const CreatePoll = ({ onPollCreated }) => {
       console.error('Transaction error:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create poll',
+        description: error.message || 'Transaction failed',
         status: 'error',
         duration: 5000,
       });
+      setIsSubmitting(false);
     },
   });
 
@@ -140,11 +152,20 @@ const CreatePoll = ({ onPollCreated }) => {
 
     try {
       setIsSubmitting(true);
-      const validOptions = getValidOptions();
+      const validOptions = getValidOptions().map(opt => opt.trim());
       const validWhitelist = hasWhitelist ? getValidWhitelist() : [];
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60); // 7 days from now
 
-      const result = await createPoll({
+      console.log('Creating poll with args:', {
+        question,
+        validOptions,
+        isMultipleChoice,
+        hasWhitelist,
+        validWhitelist,
+        deadline: deadline.toString()
+      });
+
+      createPoll({
         args: [
           question,
           validOptions,
@@ -154,12 +175,6 @@ const CreatePoll = ({ onPollCreated }) => {
           deadline,
         ],
       });
-
-      if (!result) {
-        throw new Error('Failed to create poll');
-      }
-
-      console.log('Create poll transaction:', result);
     } catch (error) {
       console.error('Error creating poll:', error);
       toast({
