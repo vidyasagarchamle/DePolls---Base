@@ -1,5 +1,6 @@
 // Contract exports
-export { DePollsABI, POLLS_CONTRACT_ADDRESS } from './abis';
+export { DePollsABI } from './abis';
+export const POLLS_CONTRACT_ADDRESS = process.env.REACT_APP_POLLS_CONTRACT_ADDRESS;
 
 // Contract types and interfaces
 export const CHAIN_ID = 84532; // Base Sepolia

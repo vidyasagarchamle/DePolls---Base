@@ -26,5 +26,9 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "env": {
+    "REACT_APP_WALLET_CONNECT_PROJECT_ID": "ad702a29a086d332c88ecdd4c8dcd51c",
+    "REACT_APP_POLLS_CONTRACT_ADDRESS": "0x41395582EDE920Dcef10fea984c9A0459885E8eB"
+  }
 } 
