@@ -2,6 +2,7 @@ import { createConfig, configureChains } from 'wagmi';
 import { baseSepolia } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
 import { w3mConnectors, w3mProvider } from '@web3modal/ethereum';
+import { EthereumClient } from '@web3modal/ethereum';
 
 const projectId = process.env.REACT_APP_WALLET_CONNECT_PROJECT_ID;
 const chains = [baseSepolia];
