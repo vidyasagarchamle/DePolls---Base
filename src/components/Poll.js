@@ -47,7 +47,6 @@ const Poll = ({ poll, onVote, onClose }) => {
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
-  const publicClient = usePublicClient();
   const { address } = useAccount();
 
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -64,85 +63,6 @@ const Poll = ({ poll, onVote, onClose }) => {
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'closePoll',
-  });
-
-  useWaitForTransaction({
-    hash: closeData?.hash,
-    onSuccess: () => {
-  // EIP-712 signature for gasless voting
-  const { signTypedData } = useSignTypedData({
-    domain: DOMAIN,
-    types: {
-      Vote: [
-        { name: 'pollId', type: 'uint256' },
-        { name: 'optionIndexes', type: 'uint256[]' },
-        { name: 'nonce', type: 'uint256' }
-      ]
-    },
-    onError: (error) => {
-      setIsSubmitting(false);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to sign vote',
-        status: 'error',
-        duration: 5000,
-      });
-    }
-  });
-
-  const { write: metaVote, data: voteData, isLoading: isVoting } = useContractWrite({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'metaVote',
-    onError: (error) => {
-      setIsSubmitting(false);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to submit vote',
-        status: 'error',
-        duration: 5000,
-      });
-    }
-  });
-
-  const { write: closePoll, data: closeData, isLoading: isClosing } = useContractWrite({
-    address: POLLS_CONTRACT_ADDRESS,
-    abi: DePollsABI,
-    functionName: 'closePoll',
-    onError: (error) => {
-      setIsSubmitting(false);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to close poll',
-        status: 'error',
-        duration: 5000,
-      });
-    }
-  });
-
-  useWaitForTransaction({
-    hash: voteData?.hash,
-    onSuccess: () => {
-      setIsSubmitting(false);
-      setSelectedOptions([]);
-      toast({
-        title: 'Success',
-        description: 'Your vote has been recorded',
-        status: 'success',
-        duration: 5000,
-      });
-      if (onVote) onVote();
-    },
-    onError: (error) => {
-      setIsSubmitting(false);
-      console.error('Vote transaction error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to submit vote',
-        status: 'error',
-        duration: 5000,
-      });
-    },
   });
 
   useWaitForTransaction({
@@ -182,53 +102,19 @@ const Poll = ({ poll, onVote, onClose }) => {
 
     setIsSubmitting(true);
     try {
-      // Try gasless voting first
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const address = await signer.getAddress();
-      
-      const nonce = await publicClient.readContract({
-        address: POLLS_CONTRACT_ADDRESS,
-        abi: DePollsABI,
-        functionName: 'nonces',
-        args: [address],
+      await vote({
+        args: [BigInt(poll.id), selectedOptions.map(i => BigInt(i))],
       });
-      const types = {
-        Vote: [
-          { name: 'pollId', type: 'uint256' },
-          { name: 'optionIndexes', type: 'uint256[]' },
-          { name: 'nonce', type: 'uint256' }
-        ]
-      };
-      const value = {
-        pollId: BigInt(poll.id),
-        optionIndexes: selectedOptions.map(i => BigInt(i)),
-        nonce: nonce.toNumber()
-      };
-
-      try {
-        const signature = await signer._signTypedData(DOMAIN, types, value);
-        await relayVote(poll.id, selectedOptions, signature);
-        toast({
-          title: 'Success',
-          description: 'Vote submitted successfully (gasless)',
-          status: 'success',
-          duration: 3000,
-        });
-        onVote();
-      } catch (error) {
-        console.warn('Gasless voting failed, falling back to normal transaction:', error);
-        // Fall back to normal transaction
-        await metaVote({
-          args: [
-            BigInt(poll.id),
-            selectedOptions.map(i => BigInt(i)),
-            v,
-            r,
-            s
-          ],
-        });
-      }
+      
+      toast({
+        title: 'Success',
+        description: 'Vote submitted successfully',
+        status: 'success',
+        duration: 3000,
+      });
+      
+      if (onVote) onVote();
+      setSelectedOptions([]);
     } catch (error) {
       console.error('Voting error:', error);
       toast({
@@ -239,9 +125,8 @@ const Poll = ({ poll, onVote, onClose }) => {
       });
     } finally {
       setIsSubmitting(false);
-      setSelectedOptions([]);
     }
-  }, [poll.id, selectedOptions, signTypedData, metaVote, toast, publicClient, address]);
+  }, [poll.id, selectedOptions, vote, toast, onVote]);
 
   const handleClose = useCallback(async () => {
     try {
@@ -406,7 +291,7 @@ const Poll = ({ poll, onVote, onClose }) => {
             </Button>
           )}
 
-          {poll.creator === poll.currentUser && poll.isActive && (
+          {poll.creator === address && poll.isActive && (
             <Button
               colorScheme="red"
               variant="outline"
