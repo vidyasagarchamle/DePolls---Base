@@ -53,7 +53,7 @@ const Poll = ({ poll, onVote, onClose }) => {
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const hoverBg = useColorModeValue('gray.50', 'gray.700');
 
-  const { write: vote } = useContractWrite({
+  const { write: vote, data: voteData } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'vote',
@@ -65,24 +65,25 @@ const Poll = ({ poll, onVote, onClose }) => {
     functionName: 'closePoll',
   });
 
-  useWaitForTransaction({
-    hash: closeData?.hash,
-    onSuccess: () => {
+  const { isLoading: isVoting } = useWaitForTransaction({
+    hash: voteData?.hash,
+    onSuccess() {
       setIsSubmitting(false);
       toast({
         title: 'Success',
-        description: 'Poll has been closed',
+        description: 'Vote submitted successfully',
         status: 'success',
-        duration: 5000,
+        duration: 3000,
       });
-      if (onClose) onClose();
+      if (onVote) onVote();
+      setSelectedOptions([]);
     },
-    onError: (error) => {
+    onError(error) {
       setIsSubmitting(false);
-      console.error('Close poll transaction error:', error);
+      console.error('Vote transaction error:', error);
       toast({
         title: 'Error',
-        description: 'Failed to close poll',
+        description: error.message || 'Failed to submit vote',
         status: 'error',
         duration: 5000,
       });
@@ -100,21 +101,11 @@ const Poll = ({ poll, onVote, onClose }) => {
       return;
     }
 
-    setIsSubmitting(true);
     try {
+      setIsSubmitting(true);
       await vote({
         args: [BigInt(poll.id), selectedOptions.map(i => BigInt(i))],
       });
-      
-      toast({
-        title: 'Success',
-        description: 'Vote submitted successfully',
-        status: 'success',
-        duration: 3000,
-      });
-      
-      if (onVote) onVote();
-      setSelectedOptions([]);
     } catch (error) {
       console.error('Voting error:', error);
       toast({
@@ -123,19 +114,19 @@ const Poll = ({ poll, onVote, onClose }) => {
         status: 'error',
         duration: 5000,
       });
-    } finally {
       setIsSubmitting(false);
     }
-  }, [poll.id, selectedOptions, vote, toast, onVote]);
+  }, [poll.id, selectedOptions, vote, toast]);
 
   const handleClose = useCallback(async () => {
+    if (!closePoll) return;
+
     try {
       setIsSubmitting(true);
       await closePoll({
         args: [BigInt(poll.id)],
       });
     } catch (error) {
-      setIsSubmitting(false);
       console.error('Error closing poll:', error);
       toast({
         title: 'Error',
@@ -143,6 +134,7 @@ const Poll = ({ poll, onVote, onClose }) => {
         status: 'error',
         duration: 5000,
       });
+      setIsSubmitting(false);
     }
   }, [poll.id, closePoll, toast]);
 
@@ -281,11 +273,12 @@ const Poll = ({ poll, onVote, onClose }) => {
             <Button
               colorScheme="brand"
               onClick={handleVote}
-              isLoading={isSubmitting}
+              isLoading={isSubmitting || isVoting}
               loadingText="Submitting vote..."
               w="full"
               size="lg"
               mt={4}
+              disabled={isSubmitting || isVoting}
             >
               Vote
             </Button>

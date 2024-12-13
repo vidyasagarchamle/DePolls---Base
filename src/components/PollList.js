@@ -201,7 +201,9 @@ const PollList = () => {
       });
       
       const active = polls.filter(poll => {
-        const isActive = poll.isActive && poll.creator?.toLowerCase() !== address?.toLowerCase();
+        const isActive = poll.isActive && 
+          poll.creator?.toLowerCase() !== address?.toLowerCase() &&
+          poll.deadline * 1000 > Date.now();
         return isActive;
       });
       
@@ -325,114 +327,45 @@ const PollList = () => {
           <ErrorBoundary>
             <CreatePoll onPollCreated={onPollCreated} />
           </ErrorBoundary>
-        </VStack>
-        
-        <Card
-          mt={8}
-          bg={bgColor}
-          borderRadius="2xl"
-          boxShadow="sm"
-          borderWidth="1px"
-          borderColor={borderColor}
-          overflow="hidden"
-        >
-          <CardHeader pb={0}>
-            <Flex justify="space-between" align="center">
-              <Heading size="md">Polls</Heading>
-              {polls.length > 0 && (
-                <Button
-                  leftIcon={<RepeatIcon />}
-                  variant="ghost"
-                  onClick={handleRefresh}
-                  isLoading={isLoading}
-                >
-                  Refresh
-                </Button>
-              )}
-            </Flex>
-          </CardHeader>
 
-          <CardBody>
-            {isLoading ? (
-              <Center py={8}>
-                <Spinner size="xl" color="brand.500" thickness="4px" />
-              </Center>
-            ) : polls.length === 0 ? (
-              <EmptyState
-                message="No polls found. Create your first poll!"
-                actionLabel="Create Poll"
-                onAction={() => document.getElementById('create-poll-button')?.click()}
-              />
-            ) : (
-              <Tabs variant="soft-rounded" colorScheme="brand">
-                <TabList
-                  bg={tabBg}
-                  p={2}
-                  borderRadius="xl"
-                  overflowX="auto"
-                  css={{
-                    scrollbarWidth: 'none',
-                    '::-webkit-scrollbar': { display: 'none' },
-                  }}
-                >
+          <Card bg={bgColor} borderRadius="xl" overflow="hidden">
+            <CardBody p={0}>
+              <Tabs variant="enclosed" colorScheme="brand">
+                <TabList bg={tabBg} px={6} pt={4}>
                   <Tab
-                    _selected={{ bg: activeBg }}
-                    borderRadius="lg"
-                    px={4}
-                    py={2}
+                    _selected={{
+                      bg: activeBg,
+                      borderBottomColor: activeBg,
+                    }}
                   >
-                    All Polls
-                    <Badge ml={2} colorScheme="brand">
-                      {polls.length}
-                    </Badge>
+                    Active Polls
                   </Tab>
                   {address && (
-                    <>
-                      <Tab
-                        _selected={{ bg: activeBg }}
-                        borderRadius="lg"
-                        px={4}
-                        py={2}
-                      >
-                        Active Polls
-                        <Badge ml={2} colorScheme="green">
-                          {activePolls.length}
-                        </Badge>
-                      </Tab>
-                      <Tab
-                        _selected={{ bg: activeBg }}
-                        borderRadius="lg"
-                        px={4}
-                        py={2}
-                      >
-                        My Polls
-                        <Badge ml={2} colorScheme="purple">
-                          {userPolls.length}
-                        </Badge>
-                      </Tab>
-                    </>
+                    <Tab
+                      _selected={{
+                        bg: activeBg,
+                        borderBottomColor: activeBg,
+                      }}
+                    >
+                      My Polls
+                    </Tab>
                   )}
                 </TabList>
 
                 <TabPanels>
-                  <TabPanel px={0}>
-                    {renderPolls(polls, "No polls found. Create your first poll!")}
+                  <TabPanel px={6} py={4}>
+                    {renderPolls(activePolls, "No active polls found")}
                   </TabPanel>
                   {address && (
-                    <>
-                      <TabPanel px={0}>
-                        {renderPolls(activePolls, "No active polls found")}
-                      </TabPanel>
-                      <TabPanel px={0}>
-                        {renderPolls(userPolls, "You haven't created any polls yet")}
-                      </TabPanel>
-                    </>
+                    <TabPanel px={6} py={4}>
+                      {renderPolls(userPolls, "You haven't created any polls yet")}
+                    </TabPanel>
                   )}
                 </TabPanels>
               </Tabs>
-            )}
-          </CardBody>
-        </Card>
+            </CardBody>
+          </Card>
+        </VStack>
       </Container>
     </ErrorBoundary>
   );
