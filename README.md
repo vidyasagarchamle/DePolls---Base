@@ -1,37 +1,45 @@
-# DePolls - Web3 Native Polling Platform
+# DePolls - Decentralized Polling Platform
 
-DePolls is a decentralized polling platform built on Base that allows users to create, vote on, and manage polls in a transparent and secure manner.
+A modern, decentralized polling platform built on Base (Sepolia testnet) that allows users to create and participate in polls without gas fees.
 
 ## Features
 
-- Create polls with multiple options
-- Vote on active polls using your Web3 wallet
-- Real-time vote tracking and visualization
-- Token-based rewards for poll participation
-- Dark/Light mode support
-- Responsive design for all devices
-- Instant transaction feedback with optimistic updates
+- **Gasless Voting**: Vote on polls without paying gas fees using EIP-712 signatures
+- **User-Friendly Interface**: Modern UI with smooth transitions and intuitive design
+- **Poll Management**:
+  - Create polls with multiple options
+  - Set custom poll duration
+  - Optional whitelisting for restricted voting
+  - View and manage your created polls
+  - Participate in active polls
+- **Advanced Features**:
+  - Real-time updates and automatic refresh
+  - Optimistic updates for instant feedback
+  - Comprehensive validation and error handling
+  - Responsive design for all devices
+  - Dark/Light mode support
 
-## Deployed Contracts (Base Sepolia)
+## Deployed Contract (Base Sepolia)
 
-- DePollsToken: `0x9be87fdCf8dC946683702192Ebd4f1924a96B18B`
 - DePolls: `0x41395582EDE920Dcef10fea984c9A0459885E8eB`
 
 ## Architecture
 
-### Smart Contracts
-- Built with Solidity and deployed on Base
-- Uses OpenZeppelin for secure token and access control implementation
-- Main contracts:
-  - `DePollsToken.sol`: ERC20 token for rewards
-  - `DePolls.sol`: Core polling logic and management
+### Smart Contract
+- Built with Solidity and deployed on Base Sepolia
+- Uses OpenZeppelin for secure implementation
+- Features:
+  - Gasless voting with EIP-712 signatures
+  - Whitelisting support
+  - Poll duration management
+  - Vote tracking and validation
 
 ### Frontend
 - React.js with Chakra UI
 - Web3 Integration:
   - WalletConnect for wallet connectivity
   - wagmi hooks for contract interactions
-  - Alchemy SDK for blockchain data
+  - viem for transaction handling
 
 ## Setup and Development
 
@@ -89,4 +97,8 @@ npx hardhat run scripts/deploy.js --network baseSepolia
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. 
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License. 
