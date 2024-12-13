@@ -6,7 +6,7 @@ import { ethereumClient } from './config/wagmi';
 import { baseSepolia } from 'wagmi/chains';
 import { useAccount } from 'wagmi';
 import Navbar from './components/Navbar';
-import { CheckIcon, TimeIcon, LockIcon, WalletIcon } from '@chakra-ui/icons';
+import { CheckIcon, TimeIcon, LockIcon, UnlockIcon } from '@chakra-ui/icons';
 
 function App() {
   const projectId = process.env.REACT_APP_WALLET_CONNECT_PROJECT_ID;
@@ -63,8 +63,6 @@ function App() {
             >
               <Box position="relative" zIndex={2}>
                 <Heading
-                  bgGradient={bgGradient}
-                  bgClip="text"
                   fontSize={{ base: "4xl", md: "6xl" }}
                   fontWeight="bold"
                   mb={6}
@@ -74,18 +72,9 @@ function App() {
                   Welcome to{" "}
                   <Text 
                     as="span" 
-                    position="relative" 
-                    _after={{
-                      content: '""',
-                      width: 'full',
-                      height: '30%',
-                      position: 'absolute',
-                      bottom: 1,
-                      left: 0,
-                      bg: useColorModeValue('blue.100', 'blue.900'),
-                      zIndex: -1,
-                      opacity: 0.3,
-                    }}
+                    position="relative"
+                    bgGradient={bgGradient}
+                    bgClip="text"
                   >
                     DePolls
                   </Text>
@@ -170,7 +159,7 @@ function App() {
               >
                 <VStack spacing={4}>
                   <Icon 
-                    as={WalletIcon} 
+                    as={UnlockIcon} 
                     boxSize={12} 
                     color={useColorModeValue('brand.500', 'brand.300')} 
                   />
