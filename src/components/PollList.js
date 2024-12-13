@@ -328,40 +328,101 @@ const PollList = () => {
             <CreatePoll onPollCreated={onPollCreated} />
           </ErrorBoundary>
 
-          <Card bg={bgColor} borderRadius="xl" overflow="hidden">
+          <Card bg={bgColor} borderRadius="xl" overflow="hidden" boxShadow="sm">
             <CardBody p={0}>
-              <Tabs variant="enclosed" colorScheme="brand">
-                <TabList bg={tabBg} px={6} pt={4}>
-                  <Tab
-                    _selected={{
-                      bg: activeBg,
-                      borderBottomColor: activeBg,
-                    }}
-                  >
-                    Active Polls
-                  </Tab>
-                  {address && (
-                    <Tab
-                      _selected={{
-                        bg: activeBg,
-                        borderBottomColor: activeBg,
-                      }}
+              <Tabs variant="line" colorScheme="brand" isLazy>
+                <Box borderBottomWidth="1px" borderColor={borderColor}>
+                  <Container maxW="container.lg">
+                    <TabList 
+                      border="none" 
+                      gap={8} 
+                      px={6} 
+                      pt={4}
                     >
-                      My Polls
-                    </Tab>
-                  )}
-                </TabList>
+                      <Tab
+                        fontSize="lg"
+                        fontWeight="semibold"
+                        color={mutedColor}
+                        _selected={{
+                          color: 'brand.500',
+                          borderColor: 'brand.500',
+                          borderBottomWidth: '3px'
+                        }}
+                        _hover={{
+                          color: 'brand.400',
+                          borderColor: 'brand.400'
+                        }}
+                      >
+                        Active Polls
+                        {activePolls.length > 0 && (
+                          <Badge
+                            ml={2}
+                            colorScheme="brand"
+                            borderRadius="full"
+                            px={2}
+                          >
+                            {activePolls.length}
+                          </Badge>
+                        )}
+                      </Tab>
+                      {address && (
+                        <Tab
+                          fontSize="lg"
+                          fontWeight="semibold"
+                          color={mutedColor}
+                          _selected={{
+                            color: 'brand.500',
+                            borderColor: 'brand.500',
+                            borderBottomWidth: '3px'
+                          }}
+                          _hover={{
+                            color: 'brand.400',
+                            borderColor: 'brand.400'
+                          }}
+                        >
+                          My Polls
+                          {userPolls.length > 0 && (
+                            <Badge
+                              ml={2}
+                              colorScheme="brand"
+                              borderRadius="full"
+                              px={2}
+                            >
+                              {userPolls.length}
+                            </Badge>
+                          )}
+                        </Tab>
+                      )}
+                    </TabList>
+                  </Container>
+                </Box>
 
-                <TabPanels>
-                  <TabPanel px={6} py={4}>
-                    {renderPolls(activePolls, "No active polls found")}
-                  </TabPanel>
-                  {address && (
-                    <TabPanel px={6} py={4}>
-                      {renderPolls(userPolls, "You haven't created any polls yet")}
-                    </TabPanel>
-                  )}
-                </TabPanels>
+                <Box py={6}>
+                  <Container maxW="container.lg">
+                    <TabPanels>
+                      <TabPanel p={0}>
+                        {isLoading ? (
+                          <Center py={8}>
+                            <Spinner size="xl" color="brand.500" thickness="4px" />
+                          </Center>
+                        ) : (
+                          renderPolls(activePolls, "No active polls found")
+                        )}
+                      </TabPanel>
+                      {address && (
+                        <TabPanel p={0}>
+                          {isLoading ? (
+                            <Center py={8}>
+                              <Spinner size="xl" color="brand.500" thickness="4px" />
+                            </Center>
+                          ) : (
+                            renderPolls(userPolls, "You haven't created any polls yet")
+                          )}
+                        </TabPanel>
+                      )}
+                    </TabPanels>
+                  </Container>
+                </Box>
               </Tabs>
             </CardBody>
           </Card>
