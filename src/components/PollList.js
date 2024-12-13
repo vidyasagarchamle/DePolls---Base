@@ -187,8 +187,16 @@ const PollList = () => {
 
   useEffect(() => {
     if (polls.length > 0 && address) {
-      const userCreated = polls.filter(poll => poll.creator.toLowerCase() === address.toLowerCase());
-      const active = polls.filter(poll => poll.isActive && poll.creator.toLowerCase() !== address.toLowerCase());
+      const userCreated = polls.filter(poll => 
+        poll.creator && address && 
+        poll.creator.toLowerCase() === address.toLowerCase()
+      );
+      
+      const active = polls.filter(poll => 
+        poll.isActive && 
+        poll.creator && address &&
+        poll.creator.toLowerCase() !== address.toLowerCase()
+      );
       
       setUserPolls(userCreated);
       setActivePolls(active);
@@ -198,10 +206,19 @@ const PollList = () => {
     }
   }, [polls, address]);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     setError(null);
-    refetchPollCount();
-  }, [refetchPollCount]);
+    setIsLoading(true);
+    try {
+      await refetchPollCount();
+      await fetchPolls();
+    } catch (error) {
+      console.error('Error refreshing polls:', error);
+      setError('Failed to refresh polls. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [refetchPollCount, fetchPolls]);
 
   const EmptyState = ({ message, actionLabel, onAction }) => (
     <Center py={12} px={6}>
@@ -230,6 +247,40 @@ const PollList = () => {
       </VStack>
     </Center>
   );
+
+  const renderPolls = (pollsToRender, emptyMessage) => {
+    if (isLoading) {
+      return (
+        <Center py={8}>
+          <Spinner size="xl" color="brand.500" />
+        </Center>
+      );
+    }
+
+    if (!pollsToRender || pollsToRender.length === 0) {
+      return (
+        <EmptyState 
+          message={emptyMessage} 
+          actionLabel={emptyMessage.includes('created') ? "Create Your First Poll" : null}
+          onAction={() => document.getElementById('createPollSection')?.scrollIntoView({ behavior: 'smooth' })}
+        />
+      );
+    }
+
+    return (
+      <VStack spacing={4} align="stretch" width="100%">
+        {pollsToRender.map((poll) => (
+          <ErrorBoundary key={poll.id}>
+            <Poll 
+              poll={poll} 
+              onVoteSuccess={handleRefresh}
+              onCloseSuccess={handleRefresh}
+            />
+          </ErrorBoundary>
+        ))}
+      </VStack>
+    );
+  };
 
   if (error) {
     return (
@@ -346,54 +397,15 @@ const PollList = () => {
 
                 <TabPanels>
                   <TabPanel px={0}>
-                    <VStack spacing={4} align="stretch">
-                      {polls.map(poll => (
-                        <Poll
-                          key={poll.id}
-                          poll={poll}
-                          onVote={handleRefresh}
-                          onClose={handleRefresh}
-                        />
-                      ))}
-                    </VStack>
+                    {renderPolls(polls, "No polls found. Create your first poll!")}
                   </TabPanel>
                   {address && (
                     <>
                       <TabPanel px={0}>
-                        <VStack spacing={4} align="stretch">
-                          {activePolls.length > 0 ? (
-                            activePolls.map(poll => (
-                              <Poll
-                                key={poll.id}
-                                poll={poll}
-                                onVote={handleRefresh}
-                                onClose={handleRefresh}
-                              />
-                            ))
-                          ) : (
-                            <EmptyState message="No active polls found" />
-                          )}
-                        </VStack>
+                        {renderPolls(activePolls, "No active polls found")}
                       </TabPanel>
                       <TabPanel px={0}>
-                        <VStack spacing={4} align="stretch">
-                          {userPolls.length > 0 ? (
-                            userPolls.map(poll => (
-                              <Poll
-                                key={poll.id}
-                                poll={poll}
-                                onVote={handleRefresh}
-                                onClose={handleRefresh}
-                              />
-                            ))
-                          ) : (
-                            <EmptyState
-                              message="You haven't created any polls yet"
-                              actionLabel="Create Your First Poll"
-                              onAction={() => document.getElementById('create-poll-button')?.click()}
-                            />
-                          )}
-                        </VStack>
+                        {renderPolls(userPolls, "You haven't created any polls yet")}
                       </TabPanel>
                     </>
                   )}

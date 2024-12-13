@@ -102,51 +102,55 @@ const CreatePoll = ({ onPollCreated }) => {
     );
   };
 
-  const { write: createPoll } = useContractWrite({
+  const { write: createPoll, data: createPollData } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
     functionName: 'createPoll',
   });
 
-  const handleCreatePoll = async (e) => {
-    e.preventDefault();
-    if (!isFormValid()) return;
-
-    setIsSubmitting(true);
-    const validOptions = getValidOptions();
-    const validWhitelist = hasWhitelist ? getValidWhitelist() : [];
-
-    try {
-      await createPoll({
-        args: [
-          question,
-          validOptions.map(opt => opt.trim()),
-          isMultipleChoice,
-          hasWhitelist,
-          validWhitelist,
-          BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60), // 7 days from now
-        ],
-      });
-
+  const { isLoading: isWaitingForTx } = useWaitForTransaction({
+    hash: createPollData?.hash,
+    onSuccess() {
       toast({
         title: 'Success',
         description: 'Poll created successfully!',
         status: 'success',
         duration: 5000,
       });
-
-      // Reset form
-      setQuestion('');
-      setOptions(['', '']);
-      setIsMultipleChoice(false);
-      setHasWhitelist(false);
-      setWhitelistAddresses(['']);
-      setTouched({});
+      resetForm();
       setIsExpanded(false);
-
       if (onPollCreated) {
         onPollCreated();
       }
+    },
+    onError(error) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create poll',
+        status: 'error',
+        duration: 5000,
+      });
+    },
+  });
+
+  const handleCreatePoll = async (e) => {
+    e.preventDefault();
+    if (!isFormValid()) return;
+
+    try {
+      const validOptions = getValidOptions();
+      const validWhitelist = hasWhitelist ? getValidWhitelist() : [];
+
+      await createPoll({
+        args: [
+          question,
+          validOptions,
+          isMultipleChoice,
+          hasWhitelist,
+          validWhitelist,
+          BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60), // 7 days from now
+        ],
+      });
     } catch (error) {
       console.error('Error creating poll:', error);
       toast({
@@ -155,8 +159,6 @@ const CreatePoll = ({ onPollCreated }) => {
         status: 'error',
         duration: 5000,
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
