@@ -102,6 +102,70 @@ const CreatePoll = ({ onPollCreated }) => {
     );
   };
 
+  const handleCreatePoll = async (e) => {
+    e.preventDefault();
+    if (!isFormValid()) return;
+
+    try {
+      setIsSubmitting(true);
+      const validOptions = getValidOptions().map(opt => opt.trim());
+      const validWhitelist = hasWhitelist ? getValidWhitelist() : [];
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60); // 7 days from now
+
+      console.log('Creating poll with args:', {
+        question: question.trim(),
+        options: validOptions,
+        deadline: deadline.toString(),
+        isMultipleChoice,
+        hasWhitelist,
+        whitelist: validWhitelist
+      });
+
+      if (!createPoll) {
+        throw new Error('Contract write function not available');
+      }
+
+      // Order of parameters according to contract:
+      // _question, _options, _deadline, _isMultipleChoice, _hasWhitelist, _whitelistedAddresses
+      const pollArgs = [
+        question.trim(),
+        validOptions,
+        deadline,
+        isMultipleChoice,
+        hasWhitelist,
+        hasWhitelist ? validWhitelist : []
+      ];
+
+      console.log('Poll arguments:', pollArgs);
+
+      await createPoll({
+        args: pollArgs,
+        onError(error) {
+          console.error('Poll creation error:', error);
+          toast({
+            title: 'Error',
+            description: error.message || 'Failed to create poll',
+            status: 'error',
+            duration: 5000,
+          });
+          setIsSubmitting(false);
+        },
+        onSuccess(data) {
+          console.log('Poll creation initiated:', data);
+        }
+      });
+    } catch (error) {
+      console.error('Error in handleCreatePoll:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create poll',
+        status: 'error',
+        duration: 5000,
+      });
+      setIsSubmitting(false);
+    }
+  };
+
   const { write: createPoll, data: createPollData, isLoading: isWriteLoading, error: writeError } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
@@ -145,47 +209,6 @@ const CreatePoll = ({ onPollCreated }) => {
       setIsSubmitting(false);
     },
   });
-
-  const handleCreatePoll = async (e) => {
-    e.preventDefault();
-    if (!isFormValid()) return;
-
-    try {
-      setIsSubmitting(true);
-      const validOptions = getValidOptions().map(opt => opt.trim());
-      const validWhitelist = hasWhitelist ? getValidWhitelist() : [];
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60); // 7 days from now
-
-      console.log('Creating poll with args:', {
-        question,
-        validOptions,
-        isMultipleChoice,
-        hasWhitelist,
-        validWhitelist,
-        deadline: deadline.toString()
-      });
-
-      createPoll({
-        args: [
-          question,
-          validOptions,
-          isMultipleChoice,
-          hasWhitelist,
-          validWhitelist,
-          deadline,
-        ],
-      });
-    } catch (error) {
-      console.error('Error creating poll:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create poll',
-        status: 'error',
-        duration: 5000,
-      });
-      setIsSubmitting(false);
-    }
-  };
 
   const resetForm = () => {
     setQuestion('');
