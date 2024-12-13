@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Box,
   Text,
@@ -43,12 +43,17 @@ const formatTimeDistance = (timestamp) => {
   return `in ${Math.floor(diffInSeconds / 86400)}d`;
 };
 
-const Poll = ({ poll, onVote, onClose }) => {
+const Poll = ({ poll: initialPoll, onVote, onClose }) => {
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pollData, setPollData] = useState(initialPoll);
   const toast = useToast();
   const toastIdRef = React.useRef();
   const { address } = useAccount();
+
+  useEffect(() => {
+    setPollData(initialPoll);
+  }, [initialPoll]);
 
   const showTransactionToast = useCallback((status, title, description) => {
     if (toastIdRef.current) {
@@ -87,6 +92,16 @@ const Poll = ({ poll, onVote, onClose }) => {
   const { isLoading: isVoting } = useWaitForTransaction({
     hash: voteData?.hash,
     onSuccess() {
+      setPollData(prev => ({
+        ...prev,
+        hasVoted: true,
+        options: prev.options.map((opt, idx) => ({
+          ...opt,
+          voteCount: selectedOptions.includes(idx) ? opt.voteCount + 1 : opt.voteCount
+        })),
+        totalVotes: prev.totalVotes + selectedOptions.length
+      }));
+
       showTransactionToast(
         'success',
         'Vote Submitted!',
@@ -125,6 +140,11 @@ const Poll = ({ poll, onVote, onClose }) => {
   const { isLoading: isClosingTx } = useWaitForTransaction({
     hash: closeData?.hash,
     onSuccess() {
+      setPollData(prev => ({
+        ...prev,
+        isActive: false
+      }));
+
       showTransactionToast(
         'success',
         'Poll Closed',
@@ -164,7 +184,7 @@ const Poll = ({ poll, onVote, onClose }) => {
       );
 
       await vote({
-        args: [BigInt(poll.id), selectedOptions.map(i => BigInt(i))],
+        args: [BigInt(pollData.id), selectedOptions.map(i => BigInt(i))],
       });
 
       showTransactionToast(
@@ -181,7 +201,7 @@ const Poll = ({ poll, onVote, onClose }) => {
       );
       setIsSubmitting(false);
     }
-  }, [poll.id, selectedOptions, vote, showTransactionToast]);
+  }, [pollData.id, selectedOptions, vote, showTransactionToast]);
 
   const handleClose = useCallback(async () => {
     try {
@@ -193,7 +213,7 @@ const Poll = ({ poll, onVote, onClose }) => {
       );
 
       await closePoll({
-        args: [BigInt(poll.id)],
+        args: [BigInt(pollData.id)],
       });
 
       showTransactionToast(
@@ -210,11 +230,11 @@ const Poll = ({ poll, onVote, onClose }) => {
       );
       setIsSubmitting(false);
     }
-  }, [poll.id, closePoll, showTransactionToast]);
+  }, [pollData.id, closePoll, showTransactionToast]);
 
-  const isExpired = poll.deadline * 1000 < Date.now();
-  const canVote = !isExpired && !poll.hasVoted && poll.isActive && (!poll.hasWhitelist || poll.isWhitelisted);
-  const showResults = poll.hasVoted || !poll.isActive || isExpired;
+  const isExpired = pollData.deadline * 1000 < Date.now();
+  const canVote = !isExpired && !pollData.hasVoted && pollData.isActive && (!pollData.hasWhitelist || pollData.isWhitelisted);
+  const showResults = pollData.hasVoted || !pollData.isActive || isExpired;
 
   return (
     <Card
@@ -230,16 +250,16 @@ const Poll = ({ poll, onVote, onClose }) => {
     >
       <CardHeader>
         <Flex align="center">
-          <Heading size="md">{poll.question}</Heading>
+          <Heading size="md">{pollData.question}</Heading>
           <Spacer />
           <HStack spacing={2}>
-            {poll.isMultipleChoice && (
+            {pollData.isMultipleChoice && (
               <Badge colorScheme="purple">Multiple Choice</Badge>
             )}
-            {poll.hasWhitelist && (
+            {pollData.hasWhitelist && (
               <Badge colorScheme="cyan">Whitelisted</Badge>
             )}
-            {!poll.isActive && (
+            {!pollData.isActive && (
               <Badge colorScheme="red">Closed</Badge>
             )}
             {isExpired && (
@@ -248,24 +268,24 @@ const Poll = ({ poll, onVote, onClose }) => {
           </HStack>
         </Flex>
         <Text fontSize="sm" color="gray.500" mt={2}>
-          Created by: {poll.creator.slice(0, 6)}...{poll.creator.slice(-4)}
+          Created by: {pollData.creator.slice(0, 6)}...{pollData.creator.slice(-4)}
         </Text>
         <Text fontSize="sm" color="gray.500">
           {isExpired
-            ? `Ended ${formatTimeDistance(poll.deadline)}`
-            : `Ends ${formatTimeDistance(poll.deadline)}`}
+            ? `Ended ${formatTimeDistance(pollData.deadline)}`
+            : `Ends ${formatTimeDistance(pollData.deadline)}`}
         </Text>
       </CardHeader>
 
       <CardBody>
         <VStack align="stretch" spacing={4}>
-          {poll.isMultipleChoice ? (
+          {pollData.isMultipleChoice ? (
             <CheckboxGroup
               value={selectedOptions}
               onChange={values => setSelectedOptions(values.map(Number))}
             >
               <VStack align="stretch" spacing={3}>
-                {poll.options.map((option, index) => (
+                {pollData.options.map((option, index) => (
                   <Box
                     key={index}
                     p={4}
@@ -290,7 +310,7 @@ const Poll = ({ poll, onVote, onClose }) => {
                     </HStack>
                     {showResults && (
                       <Progress
-                        value={(option.voteCount / Math.max(1, poll.totalVotes)) * 100}
+                        value={(option.voteCount / Math.max(1, pollData.totalVotes)) * 100}
                         size="sm"
                         colorScheme="brand"
                         mt={2}
@@ -306,7 +326,7 @@ const Poll = ({ poll, onVote, onClose }) => {
               onChange={value => setSelectedOptions([Number(value)])}
             >
               <VStack align="stretch" spacing={3}>
-                {poll.options.map((option, index) => (
+                {pollData.options.map((option, index) => (
                   <Box
                     key={index}
                     p={4}
@@ -331,7 +351,7 @@ const Poll = ({ poll, onVote, onClose }) => {
                     </HStack>
                     {showResults && (
                       <Progress
-                        value={(option.voteCount / Math.max(1, poll.totalVotes)) * 100}
+                        value={(option.voteCount / Math.max(1, pollData.totalVotes)) * 100}
                         size="sm"
                         colorScheme="brand"
                         mt={2}
@@ -358,7 +378,7 @@ const Poll = ({ poll, onVote, onClose }) => {
             </Button>
           )}
 
-          {poll.creator === address && poll.isActive && (
+          {pollData.creator === address && pollData.isActive && (
             <Button
               colorScheme="red"
               variant="outline"
