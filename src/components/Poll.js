@@ -23,6 +23,8 @@ import {
 import { useContractWrite, useWaitForTransaction, useSignTypedData, usePublicClient, useAccount } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
 import { DOMAIN } from '../contracts';
+import { ethers } from 'ethers';
+import { relayVote } from '../utils/relay';
 
 const formatTimeDistance = (timestamp) => {
   const now = Date.now();
@@ -165,50 +167,66 @@ const Poll = ({ poll, onVote, onClose }) => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
-
-      // Get current nonce
+      // Try gasless voting first
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const address = await signer.getAddress();
+      
       const nonce = await publicClient.readContract({
         address: POLLS_CONTRACT_ADDRESS,
         abi: DePollsABI,
         functionName: 'nonces',
         args: [address],
       });
-      
-      // Get signature for gasless voting
-      const signature = await signTypedData({
-        value: {
-          pollId: BigInt(poll.id),
-          optionIndexes: selectedOptions.map(i => BigInt(i)),
-          nonce
-        }
-      });
+      const types = {
+        Vote: [
+          { name: 'pollId', type: 'uint256' },
+          { name: 'optionIndexes', type: 'uint256[]' },
+          { name: 'nonce', type: 'uint256' }
+        ]
+      };
+      const value = {
+        pollId: BigInt(poll.id),
+        optionIndexes: selectedOptions.map(i => BigInt(i)),
+        nonce: nonce.toNumber()
+      };
 
-      // Split signature into v, r, s components
-      const r = signature.slice(0, 66);
-      const s = '0x' + signature.slice(66, 130);
-      const v = parseInt(signature.slice(130, 132), 16);
-
-      // Submit gasless vote
-      await metaVote({
-        args: [
-          BigInt(poll.id),
-          selectedOptions.map(i => BigInt(i)),
-          v,
-          r,
-          s
-        ],
-      });
+      try {
+        const signature = await signer._signTypedData(DOMAIN, types, value);
+        await relayVote(poll.id, selectedOptions, signature);
+        toast({
+          title: 'Success',
+          description: 'Vote submitted successfully (gasless)',
+          status: 'success',
+          duration: 3000,
+        });
+        onVote();
+      } catch (error) {
+        console.warn('Gasless voting failed, falling back to normal transaction:', error);
+        // Fall back to normal transaction
+        await metaVote({
+          args: [
+            BigInt(poll.id),
+            selectedOptions.map(i => BigInt(i)),
+            v,
+            r,
+            s
+          ],
+        });
+      }
     } catch (error) {
-      setIsSubmitting(false);
-      console.error('Error voting:', error);
+      console.error('Voting error:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to submit vote',
         status: 'error',
         duration: 5000,
       });
+    } finally {
+      setIsSubmitting(false);
+      setSelectedOptions([]);
     }
   }, [poll.id, selectedOptions, signTypedData, metaVote, toast, publicClient, address]);
 
