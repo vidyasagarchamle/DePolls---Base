@@ -1,22 +1,23 @@
 import React from 'react';
-import { Container, VStack, Box, Heading, Text, useColorModeValue, ChakraProvider } from '@chakra-ui/react';
-import { Web3Modal } from '@web3modal/react';
+import { Container, VStack, Box, Heading, Text, useColorModeValue } from '@chakra-ui/react';
+import { Web3Modal, Web3Button } from '@web3modal/react';
 import { PollList } from './components';
 import { ethereumClient } from './config/wagmi';
 import { baseSepolia } from 'wagmi/chains';
-import Navbar from './components/Navbar';
-import { Web3Button } from '@web3modal/react';
 import { Card } from '@chakra-ui/react';
+import { useAccount } from 'wagmi';
+import theme from './theme';
 
 function App() {
   const projectId = process.env.REACT_APP_WALLET_CONNECT_PROJECT_ID;
-  const bgGradient = useColorModeValue(
-    'linear(to-r, blue.400, purple.500)',
-    'linear(to-r, blue.200, purple.300)'
-  );
+  const { isConnected } = useAccount();
+  
+  const bgColor = useColorModeValue('gray.50', 'gray.900');
+  const textColor = useColorModeValue('gray.800', 'gray.100');
+  const cardBg = useColorModeValue('white', 'gray.800');
 
   return (
-    <ChakraProvider theme={theme}>
+    <>
       <Box minH="100vh" bg={bgColor}>
         <Container maxW="container.lg" py={8}>
           <VStack spacing={8} align="stretch">
@@ -44,7 +45,19 @@ function App() {
           </VStack>
         </Container>
       </Box>
-    </ChakraProvider>
+
+      <Web3Modal
+        projectId={projectId}
+        ethereumClient={ethereumClient}
+        defaultChain={baseSepolia}
+        themeVariables={{
+          '--w3m-font-family': 'Outfit, sans-serif',
+          '--w3m-accent-color': '#0093FF',
+          '--w3m-background-color': '#ffffff',
+          '--w3m-container-border-radius': '16px',
+        }}
+      />
+    </>
   );
 }
 
