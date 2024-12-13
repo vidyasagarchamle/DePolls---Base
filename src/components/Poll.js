@@ -20,8 +20,9 @@ import {
   RadioGroup,
   CheckboxGroup,
 } from '@chakra-ui/react';
-import { useContractWrite, useWaitForTransaction } from 'wagmi';
+import { useContractWrite, useWaitForTransaction, useSignTypedData, usePublicClient, useAccount } from 'wagmi';
 import { DePollsABI, POLLS_CONTRACT_ADDRESS } from '../contracts/abis';
+import { DOMAIN } from '../contracts';
 
 const formatTimeDistance = (timestamp) => {
   const now = Date.now();
@@ -46,15 +47,38 @@ const Poll = ({ poll, onVote, onClose }) => {
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
+  const publicClient = usePublicClient();
+  const { address } = useAccount();
 
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const hoverBg = useColorModeValue('gray.50', 'gray.700');
 
-  const { write: vote, data: voteData, isLoading: isVoting } = useContractWrite({
+  // EIP-712 signature for gasless voting
+  const { signTypedData } = useSignTypedData({
+    domain: DOMAIN,
+    types: {
+      Vote: [
+        { name: 'pollId', type: 'uint256' },
+        { name: 'optionIndexes', type: 'uint256[]' },
+        { name: 'nonce', type: 'uint256' }
+      ]
+    },
+    onError: (error) => {
+      setIsSubmitting(false);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to sign vote',
+        status: 'error',
+        duration: 5000,
+      });
+    }
+  });
+
+  const { write: metaVote, data: voteData, isLoading: isVoting } = useContractWrite({
     address: POLLS_CONTRACT_ADDRESS,
     abi: DePollsABI,
-    functionName: 'vote',
+    functionName: 'metaVote',
     onError: (error) => {
       setIsSubmitting(false);
       toast({
@@ -143,8 +167,38 @@ const Poll = ({ poll, onVote, onClose }) => {
 
     try {
       setIsSubmitting(true);
-      await vote({
-        args: [BigInt(poll.id), selectedOptions.map(i => BigInt(i))],
+
+      // Get current nonce
+      const nonce = await publicClient.readContract({
+        address: POLLS_CONTRACT_ADDRESS,
+        abi: DePollsABI,
+        functionName: 'nonces',
+        args: [address],
+      });
+      
+      // Get signature for gasless voting
+      const signature = await signTypedData({
+        value: {
+          pollId: BigInt(poll.id),
+          optionIndexes: selectedOptions.map(i => BigInt(i)),
+          nonce
+        }
+      });
+
+      // Split signature into v, r, s components
+      const r = signature.slice(0, 66);
+      const s = '0x' + signature.slice(66, 130);
+      const v = parseInt(signature.slice(130, 132), 16);
+
+      // Submit gasless vote
+      await metaVote({
+        args: [
+          BigInt(poll.id),
+          selectedOptions.map(i => BigInt(i)),
+          v,
+          r,
+          s
+        ],
       });
     } catch (error) {
       setIsSubmitting(false);
@@ -156,7 +210,7 @@ const Poll = ({ poll, onVote, onClose }) => {
         duration: 5000,
       });
     }
-  }, [poll.id, selectedOptions, vote, toast]);
+  }, [poll.id, selectedOptions, signTypedData, metaVote, toast, publicClient, address]);
 
   const handleClose = useCallback(async () => {
     try {
@@ -246,24 +300,19 @@ const Poll = ({ poll, onVote, onClose }) => {
                       ) : (
                         <Text>{option.text}</Text>
                       )}
-                    </HStack>
-                    
-                    {showResults && (
-                      <Box mt={2}>
-                        <Progress
-                          value={(option.voteCount / (poll.totalVotes || 1)) * 100}
-                          size="sm"
-                          colorScheme="brand"
-                          borderRadius="full"
-                        />
-                        <Text fontSize="sm" mt={1}>
-                          {option.voteCount} vote{option.voteCount !== 1 ? 's' : ''} (
-                          {poll.totalVotes > 0
-                            ? ((option.voteCount / poll.totalVotes) * 100).toFixed(1)
-                            : '0'}
-                          %)
+                      {showResults && (
+                        <Text ml="auto" color="gray.500">
+                          {option.voteCount} votes
                         </Text>
-                      </Box>
+                      )}
+                    </HStack>
+                    {showResults && (
+                      <Progress
+                        value={(option.voteCount / Math.max(1, poll.totalVotes)) * 100}
+                        size="sm"
+                        colorScheme="brand"
+                        mt={2}
+                      />
                     )}
                   </Box>
                 ))}
@@ -292,24 +341,19 @@ const Poll = ({ poll, onVote, onClose }) => {
                       ) : (
                         <Text>{option.text}</Text>
                       )}
-                    </HStack>
-                    
-                    {showResults && (
-                      <Box mt={2}>
-                        <Progress
-                          value={(option.voteCount / (poll.totalVotes || 1)) * 100}
-                          size="sm"
-                          colorScheme="brand"
-                          borderRadius="full"
-                        />
-                        <Text fontSize="sm" mt={1}>
-                          {option.voteCount} vote{option.voteCount !== 1 ? 's' : ''} (
-                          {poll.totalVotes > 0
-                            ? ((option.voteCount / poll.totalVotes) * 100).toFixed(1)
-                            : '0'}
-                          %)
+                      {showResults && (
+                        <Text ml="auto" color="gray.500">
+                          {option.voteCount} votes
                         </Text>
-                      </Box>
+                      )}
+                    </HStack>
+                    {showResults && (
+                      <Progress
+                        value={(option.voteCount / Math.max(1, poll.totalVotes)) * 100}
+                        size="sm"
+                        colorScheme="brand"
+                        mt={2}
+                      />
                     )}
                   </Box>
                 ))}
@@ -320,23 +364,26 @@ const Poll = ({ poll, onVote, onClose }) => {
           {canVote && (
             <Button
               colorScheme="brand"
-              isLoading={isSubmitting || isVoting}
-              loadingText={isVoting ? 'Submitting Vote...' : 'Processing...'}
               onClick={handleVote}
-              isDisabled={selectedOptions.length === 0 || isSubmitting}
+              isLoading={isSubmitting}
+              loadingText="Submitting vote..."
+              w="full"
+              size="lg"
+              mt={4}
             >
-              Submit Vote
+              Vote
             </Button>
           )}
 
-          {poll.isCreator && poll.isActive && (
+          {poll.creator === poll.currentUser && poll.isActive && (
             <Button
               colorScheme="red"
               variant="outline"
-              isLoading={isSubmitting || isClosing}
-              loadingText={isClosing ? 'Closing Poll...' : 'Processing...'}
               onClick={handleClose}
-              isDisabled={isSubmitting}
+              isLoading={isClosing}
+              loadingText="Closing poll..."
+              w="full"
+              size="lg"
             >
               Close Poll
             </Button>
